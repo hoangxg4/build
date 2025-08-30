@@ -2,9 +2,6 @@ name: Build GNU Make (Static)
 
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - main
 
 jobs:
   build:
