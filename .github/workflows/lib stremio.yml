@@ -1,109 +1,112 @@
-name: Build Portable GNOME + Libs (Stable Master ATK)
+name: Build GTK3 with Ayatana
 
 on:
   workflow_dispatch:
-  push:
-    branches: ["main"]
 
 jobs:
   build:
-    runs-on: ubuntu-22.04
-    env:
-      PREFIX: ${{ github.workspace }}/portable
+    runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Install tools
+      - name: Setup dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y build-essential meson ninja-build cmake pkg-config \
-                                  python3-pip wget curl xz-utils git
-          pip install --upgrade meson
+          sudo apt-get install -y \
+            ninja-build meson build-essential \
+            pkg-config python3-dev python3-pip \
+            libffi-dev libmount-dev libzstd-dev \
+            gettext itstool libxml2-dev \
+            gobject-introspection libgirepository1.0-dev
 
-      - name: Prepare prefix
-        run: mkdir -p $PREFIX
+          mkdir -p $HOME/deps
 
-      # === GLib ===
-      - name: Build GLib
+          echo "PKG_CONFIG_PATH=$HOME/deps/lib/pkgconfig:$HOME/deps/share/pkgconfig:$PKG_CONFIG_PATH" >> $GITHUB_ENV
+          echo "LD_LIBRARY_PATH=$HOME/deps/lib:$LD_LIBRARY_PATH" >> $GITHUB_ENV
+          echo "PATH=$HOME/deps/bin:$PATH" >> $GITHUB_ENV
+
+      - name: Build OpenSSL
         run: |
-          wget https://download.gnome.org/sources/glib/2.82/glib-2.82.1.tar.xz
-          tar xf glib-2.82.1.tar.xz
-          cd glib-2.82.1
-          meson setup builddir --prefix=$PREFIX --buildtype=release
+          curl -LO https://www.openssl.org/source/openssl-3.3.1.tar.gz
+          tar xf openssl-3.3.1.tar.gz
+          cd openssl-3.3.1
+          ./config --prefix=$HOME/deps --openssldir=$HOME/deps/ssl
+          make -j$(nproc)
+          make install_sw
+          cd ..
+
+      - name: Build glib
+        run: |
+          git clone https://gitlab.gnome.org/GNOME/glib.git --branch 2.82.2 --depth=1
+          cd glib
+          meson setup builddir --prefix=$HOME/deps --buildtype=release -Dlibmount=enabled -Dtests=false
           ninja -C builddir
           ninja -C builddir install
+          cd ..
 
-      - name: Setup env
+      - name: Build pango
         run: |
-          echo "PKG_CONFIG_PATH=$PREFIX/lib/pkgconfig:$PREFIX/share/pkgconfig" >> $GITHUB_ENV
-          echo "LD_LIBRARY_PATH=$PREFIX/lib" >> $GITHUB_ENV
-          echo "PATH=$PREFIX/bin:$PATH" >> $GITHUB_ENV
-
-      # === Pango ===
-      - name: Build Pango
-        run: |
-          git clone https://gitlab.gnome.org/GNOME/pango.git --depth=1 --branch main
+          git clone https://gitlab.gnome.org/GNOME/pango.git --branch 1.54.0 --depth=1
           cd pango
-          meson setup builddir --prefix=$PREFIX --buildtype=release
+          meson setup builddir --prefix=$HOME/deps --buildtype=release -Dtests=false
           ninja -C builddir
           ninja -C builddir install
+          cd ..
 
-      # === ATK (master) ===
-      - name: Build ATK
+      - name: Build atk
         run: |
           git clone https://gitlab.gnome.org/GNOME/atk.git --branch master --depth=1
           cd atk
-          meson setup builddir --prefix=$PREFIX --buildtype=release -Dintrospection=false
+          meson setup builddir --prefix=$HOME/deps --buildtype=release -Dintrospection=enabled -Ddocs=false -Dtests=false
           ninja -C builddir
           ninja -C builddir install
+          cd ..
 
-      # === GTK3 ===
-      - name: Build GTK3
+      - name: Build gdk-pixbuf
+        run: |
+          git clone https://gitlab.gnome.org/GNOME/gdk-pixbuf.git --branch 2.42.12 --depth=1
+          cd gdk-pixbuf
+          meson setup builddir --prefix=$HOME/deps --buildtype=release -Dtests=false
+          ninja -C builddir
+          ninja -C builddir install
+          cd ..
+
+      - name: Build gtk3
         run: |
           git clone https://gitlab.gnome.org/GNOME/gtk.git --branch gtk-3-24 --depth=1
           cd gtk
-
-          # prefix nơi cài ra (ví dụ $HOME/gtk3)
-          PREFIX=$HOME/gtk3
-
-          meson setup builddir \
-            --prefix=$PREFIX \
-            --buildtype=release \
-            -Dman=false \
-            -Dgtk_doc=false
-
+          meson setup builddir --prefix=$HOME/deps --buildtype=release \
+            -Dintrospection=enabled -Ddemos=false -Dexamples=false -Dtests=false
           ninja -C builddir
           ninja -C builddir install
-      # === OpenSSL ===
-      - name: Build OpenSSL
-        run: |
-          wget https://www.openssl.org/source/openssl-3.3.1.tar.gz
-          tar xf openssl-3.3.1.tar.gz
-          cd openssl-3.3.1
-          ./config --prefix=$PREFIX --openssldir=$PREFIX/ssl no-shared
-          make -j$(nproc)
-          make install_sw
+          cd ..
 
-      # === libayatana-appindicator ===
+      - name: Build libayatana-ido
+        run: |
+          git clone https://github.com/AyatanaIndicators/libayatana-ido.git --branch 0.9.3 --depth=1
+          cd libayatana-ido
+          meson setup builddir --prefix=$HOME/deps --buildtype=release -Dtests=false
+          ninja -C builddir
+          ninja -C builddir install
+          cd ..
+
       - name: Build libayatana-appindicator
         run: |
-          git clone https://github.com/AyatanaIndicators/libayatana-appindicator.git --depth=1
+          git clone https://github.com/AyatanaIndicators/libayatana-appindicator.git --branch 0.5.93 --depth=1
           cd libayatana-appindicator
-          mkdir build && cd build
-          cmake .. -DCMAKE_INSTALL_PREFIX=$PREFIX -DCMAKE_BUILD_TYPE=Release
-          make -j$(nproc)
-          make install
+          meson setup builddir --prefix=$HOME/deps --buildtype=release \
+            -Dgtk_doc=false -Dtests=false
+          ninja -C builddir
+          ninja -C builddir install
+          cd ..
 
-      # === Package ===
-      - name: Package portable bundle
+      - name: Package artifacts
         run: |
-          cd $PREFIX
-          tar czf ${{ github.workspace }}/portable-libs.tar.gz *
+          tar czf gtk3-ayatana.tar.gz -C $HOME deps
+          mkdir -p artifacts
+          mv gtk3-ayatana.tar.gz artifacts/
 
-      - name: Upload artifact
+      - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: portable-libs
-          path: portable-libs.tar.gz
+          name: gtk3-ayatana
+          path: artifacts/gtk3-ayatana.tar.gz
