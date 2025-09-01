@@ -1,0 +1,64 @@
+name: Build Portable Libs
+
+on:
+  workflow_dispatch:
+  push:
+    branches: ["main"]
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Update APT
+        run: sudo apt-get update
+
+      - name: Install build tools
+        run: sudo apt-get install -y build-essential meson ninja-build cmake pkg-config git wget curl
+
+      # Build OpenSSL (libssl-dev)
+      - name: Build OpenSSL
+        run: |
+          mkdir -p build/openssl
+          cd build/openssl
+          wget https://www.openssl.org/source/openssl-3.3.1.tar.gz
+          tar xf openssl-3.3.1.tar.gz
+          cd openssl-3.3.1
+          ./config --prefix=$PWD/../out/openssl --openssldir=$PWD/../out/openssl no-shared
+          make -j$(nproc)
+          make install_sw
+
+      # Build GTK 3
+      - name: Build GTK 3
+        run: |
+          mkdir -p build/gtk && cd build/gtk
+          git clone https://gitlab.gnome.org/GNOME/gtk.git --branch gtk-3-24 --depth=1
+          cd gtk
+          meson setup builddir --prefix=$PWD/../../out/gtk --buildtype=release
+          ninja -C builddir
+          ninja -C builddir install
+
+      # Build libayatana-appindicator3
+      - name: Build libayatana-appindicator3
+        run: |
+          mkdir -p build/ayatana && cd build/ayatana
+          git clone https://github.com/AyatanaIndicators/libayatana-appindicator.git --depth=1
+          cd libayatana-appindicator
+          mkdir build && cd build
+          cmake .. -DCMAKE_INSTALL_PREFIX=$PWD/../../../out/ayatana -DCMAKE_BUILD_TYPE=Release
+          make -j$(nproc)
+          make install
+
+      - name: Package output
+        run: |
+          cd build/out
+          tar czf ../../portable-libs.tar.gz *
+
+      - name: Upload portable libs
+        uses: actions/upload-artifact@v4
+        with:
+          name: portable-libs
+          path: portable-libs.tar.gz
