@@ -64,10 +64,18 @@ jobs:
         run: |
           git clone https://gitlab.gnome.org/GNOME/gtk.git --branch gtk-3-24 --depth=1
           cd gtk
-          meson setup builddir --prefix=$PREFIX --buildtype=release -Dbuild-tests=false -Dintrospection=false
+
+          # prefix nơi cài ra (ví dụ $HOME/gtk3)
+          PREFIX=$HOME/gtk3
+
+          meson setup builddir \
+            --prefix=$PREFIX \
+            --buildtype=release \
+            -Dman=false \
+            -Dgtk_doc=false
+
           ninja -C builddir
           ninja -C builddir install
-
       # === OpenSSL ===
       - name: Build OpenSSL
         run: |
