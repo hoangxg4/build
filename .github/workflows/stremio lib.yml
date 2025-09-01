@@ -68,9 +68,10 @@ jobs:
         export PKG_CONFIG_PATH=$GITHUB_WORKSPACE/local/lib/pkgconfig:$PKG_CONFIG_PATH
         export CFLAGS="-I$GITHUB_WORKSPACE/local/include"
         export LDFLAGS="-L$GITHUB_WORKSPACE/local/lib"
-        ./configure --prefix=$GITHUB_WORKSPACE/local --disable-gtk-doc
-        make -j$(nproc)
-        make install
+        # <<< CÁC LỆNH BUILD GTK ĐÃ THAY ĐỔI Ở ĐÂY
+        meson setup build --prefix=$GITHUB_WORKSPACE/local -Dgtk_doc=false
+        ninja -C build
+        ninja -C build install
         cd ..
 
     - name: 5. Build and Install libayatana-appindicator (libayatana-appindicator3-dev)
