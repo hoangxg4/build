@@ -2,8 +2,6 @@ name: Build Portable Libs
 
 on:
   workflow_dispatch:
-  push:
-    branches: ["main"]
 
 jobs:
   build:
