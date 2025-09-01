@@ -32,6 +32,17 @@ jobs:
           make -j$(nproc)
           make install_sw
 
+      # Build GLib
+      - name: Build GLib
+        run: |
+          mkdir -p build/glib && cd build/glib
+          wget https://download.gnome.org/sources/glib/2.82/glib-2.82.1.tar.xz
+          tar xf glib-2.82.1.tar.xz
+          cd glib-2.82.1
+          meson setup builddir --prefix=$PWD/../../../out/portable --buildtype=release
+          ninja -C builddir
+          ninja -C builddir install
+
       # Build GTK 3
       - name: Build GTK 3
         run: |
