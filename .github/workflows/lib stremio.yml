@@ -1,4 +1,4 @@
-name: Build Portable GNOME + Libs (Stable)
+name: Build Portable GNOME + Libs (Stable Master ATK)
 
 on:
   workflow_dispatch:
@@ -50,10 +50,10 @@ jobs:
           ninja -C builddir
           ninja -C builddir install
 
-      # === ATK (LTS) ===
+      # === ATK (master) ===
       - name: Build ATK
         run: |
-          git clone https://gitlab.gnome.org/GNOME/atk.git --branch atk-2-38 --depth=1
+          git clone https://gitlab.gnome.org/GNOME/atk.git --branch master --depth=1
           cd atk
           meson setup builddir --prefix=$PREFIX --buildtype=release
           ninja -C builddir
