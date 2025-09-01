@@ -1,0 +1,96 @@
+name: Build GTK, SSL, and AppIndicator Libraries
+
+on:
+  push:
+    branches: [ main ] # Chạy khi có push lên nhánh main
+  workflow_dispatch:   # Cho phép chạy thủ công từ tab Actions
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    container: ubuntu:20.04 # Sử dụng Ubuntu 20.04 để build
+
+    steps:
+    - name: 1. Set up Environment and Install Dependencies
+      run: |
+        export DEBIAN_FRONTEND=noninteractive
+        apt-get update
+        apt-get install -y --no-install-recommends \
+          build-essential \
+          wget \
+          git \
+          pkg-config \
+          meson \
+          ninja-build \
+          libglib2.0-dev \
+          libdbus-1-dev \
+          libgirepository1.0-dev \
+          gobject-introspection \
+          gtk-doc-tools \
+          libfribidi-dev \
+          libharfbuzz-dev \
+          libpango1.0-dev \
+          libcairo2-dev \
+          libgdk-pixbuf2.0-dev \
+          libepoxy-dev \
+          libx11-dev \
+          libxext-dev \
+          libxinerama-dev \
+          libxrandr-dev \
+          libxcursor-dev \
+          libxfixes-dev \
+          libxi-dev \
+          libxcomposite-dev \
+          libxdamage-dev \
+          libwayland-dev \
+          wayland-protocols \
+          libxkbcommon-dev
+
+    - name: 2. Create Installation Directory
+      run: mkdir -p $GITHUB_WORKSPACE/local
+
+    - name: 3. Build and Install OpenSSL (libssl-dev)
+      run: |
+        wget https://www.openssl.org/source/openssl-1.1.1w.tar.gz
+        tar -xf openssl-1.1.1w.tar.gz
+        cd openssl-1.1.1w
+        ./config --prefix=$GITHUB_WORKSPACE/local --openssldir=$GITHUB_WORKSPACE/local/ssl
+        make -j$(nproc)
+        make install_sw
+        cd ..
+
+    - name: 4. Build and Install GTK+ 3 (libgtk-3-dev)
+      run: |
+        wget https://download.gnome.org/sources/gtk+/3.24/gtk+-3.24.38.tar.xz
+        tar -xf gtk+-3.24.38.tar.xz
+        cd gtk+-3.24.38
+        export PKG_CONFIG_PATH=$GITHUB_WORKSPACE/local/lib/pkgconfig:$PKG_CONFIG_PATH
+        export CFLAGS="-I$GITHUB_WORKSPACE/local/include"
+        export LDFLAGS="-L$GITHUB_WORKSPACE/local/lib"
+        ./configure --prefix=$GITHUB_WORKSPACE/local --disable-gtk-doc
+        make -j$(nproc)
+        make install
+        cd ..
+
+    - name: 5. Build and Install libayatana-appindicator (libayatana-appindicator3-dev)
+      run: |
+        wget https://github.com/AyatanaIndicators/libayatana-appindicator/archive/refs/tags/0.5.93.tar.gz -O libayatana-appindicator-0.5.93.tar.gz
+        tar -xf libayatana-appindicator-0.5.93.tar.gz
+        cd libayatana-appindicator-0.5.93
+        export PKG_CONFIG_PATH=$GITHUB_WORKSPACE/local/lib/pkgconfig:$PKG_CONFIG_PATH
+        export CFLAGS="-I$GITHUB_WORKSPACE/local/include"
+        export LDFLAGS="-L$GITHUB_WORKSPACE/local/lib"
+        ./autogen.sh --prefix=$GITHUB_WORKSPACE/local
+        make -j$(nproc)
+        make install
+        cd ..
+
+    - name: 6. Archive Compiled Libraries
+      run: |
+        tar -czvf custom-libs.tar.gz -C $GITHUB_WORKSPACE/local .
+
+    - name: 7. Upload Artifact
+      uses: actions/upload-artifact@v3
+      with:
+        name: custom-dev-libs
+        path: custom-libs.tar.gz
