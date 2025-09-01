@@ -1,4 +1,4 @@
-name: Build Portable GNOME + Libs
+name: Build Portable GNOME + Libs (Stable)
 
 on:
   workflow_dispatch:
@@ -25,6 +25,7 @@ jobs:
       - name: Prepare prefix
         run: mkdir -p $PREFIX
 
+      # === GLib ===
       - name: Build GLib
         run: |
           wget https://download.gnome.org/sources/glib/2.82/glib-2.82.1.tar.xz
@@ -40,6 +41,7 @@ jobs:
           echo "LD_LIBRARY_PATH=$PREFIX/lib" >> $GITHUB_ENV
           echo "PATH=$PREFIX/bin:$PATH" >> $GITHUB_ENV
 
+      # === Pango ===
       - name: Build Pango
         run: |
           git clone https://gitlab.gnome.org/GNOME/pango.git --depth=1 --branch main
@@ -48,14 +50,16 @@ jobs:
           ninja -C builddir
           ninja -C builddir install
 
+      # === ATK (LTS) ===
       - name: Build ATK
         run: |
-          git clone https://gitlab.gnome.org/GNOME/atk.git --depth=1 --branch main
+          git clone https://gitlab.gnome.org/GNOME/atk.git --branch atk-2-38 --depth=1
           cd atk
           meson setup builddir --prefix=$PREFIX --buildtype=release
           ninja -C builddir
           ninja -C builddir install
 
+      # === GTK3 ===
       - name: Build GTK3
         run: |
           git clone https://gitlab.gnome.org/GNOME/gtk.git --branch gtk-3-24 --depth=1
@@ -64,6 +68,7 @@ jobs:
           ninja -C builddir
           ninja -C builddir install
 
+      # === OpenSSL ===
       - name: Build OpenSSL
         run: |
           wget https://www.openssl.org/source/openssl-3.3.1.tar.gz
@@ -73,6 +78,7 @@ jobs:
           make -j$(nproc)
           make install_sw
 
+      # === libayatana-appindicator ===
       - name: Build libayatana-appindicator
         run: |
           git clone https://github.com/AyatanaIndicators/libayatana-appindicator.git --depth=1
@@ -82,6 +88,7 @@ jobs:
           make -j$(nproc)
           make install
 
+      # === Package ===
       - name: Package portable bundle
         run: |
           cd $PREFIX
