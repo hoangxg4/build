@@ -1,75 +1,93 @@
-name: Build Portable Libs
+name: Build Portable GNOME + Libs
 
 on:
   workflow_dispatch:
+  push:
+    branches: ["main"]
 
 jobs:
   build:
     runs-on: ubuntu-22.04
+    env:
+      PREFIX: ${{ github.workspace }}/portable
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Update APT
-        run: sudo apt-get update
-
-      - name: Install build tools
+      - name: Install tools
         run: |
-         sudo apt-get install -y build-essential ninja-build cmake pkg-config git wget curl python3-pip
-         pip install --upgrade pip
-         pip install meson==1.4.1
-    
-      # Build OpenSSL (libssl-dev)
-      - name: Build OpenSSL
-        run: |
-          mkdir -p build/openssl
-          cd build/openssl
-          wget https://www.openssl.org/source/openssl-3.3.1.tar.gz
-          tar xf openssl-3.3.1.tar.gz
-          cd openssl-3.3.1
-          ./config --prefix=$PWD/../out/openssl --openssldir=$PWD/../out/openssl no-shared
-          make -j$(nproc)
-          make install_sw
+          sudo apt-get update
+          sudo apt-get install -y build-essential meson ninja-build cmake pkg-config \
+                                  python3-pip wget curl xz-utils git
+          pip install --upgrade meson
 
-      # Build GLib
+      - name: Prepare prefix
+        run: mkdir -p $PREFIX
+
       - name: Build GLib
         run: |
-          mkdir -p build/glib && cd build/glib
           wget https://download.gnome.org/sources/glib/2.82/glib-2.82.1.tar.xz
           tar xf glib-2.82.1.tar.xz
           cd glib-2.82.1
-          meson setup builddir --prefix=$PWD/../../../out/portable --buildtype=release
+          meson setup builddir --prefix=$PREFIX --buildtype=release
           ninja -C builddir
           ninja -C builddir install
 
-      # Build GTK 3
-      - name: Build GTK 3
+      - name: Setup env
         run: |
-          mkdir -p build/gtk && cd build/gtk
+          echo "PKG_CONFIG_PATH=$PREFIX/lib/pkgconfig:$PREFIX/share/pkgconfig" >> $GITHUB_ENV
+          echo "LD_LIBRARY_PATH=$PREFIX/lib" >> $GITHUB_ENV
+          echo "PATH=$PREFIX/bin:$PATH" >> $GITHUB_ENV
+
+      - name: Build Pango
+        run: |
+          git clone https://gitlab.gnome.org/GNOME/pango.git --depth=1 --branch main
+          cd pango
+          meson setup builddir --prefix=$PREFIX --buildtype=release
+          ninja -C builddir
+          ninja -C builddir install
+
+      - name: Build ATK
+        run: |
+          git clone https://gitlab.gnome.org/GNOME/atk.git --depth=1 --branch main
+          cd atk
+          meson setup builddir --prefix=$PREFIX --buildtype=release
+          ninja -C builddir
+          ninja -C builddir install
+
+      - name: Build GTK3
+        run: |
           git clone https://gitlab.gnome.org/GNOME/gtk.git --branch gtk-3-24 --depth=1
           cd gtk
-          meson setup builddir --prefix=$PWD/../../out/gtk --buildtype=release
+          meson setup builddir --prefix=$PREFIX --buildtype=release -Dbuild-examples=false -Dbuild-tests=false
           ninja -C builddir
           ninja -C builddir install
 
-      # Build libayatana-appindicator3
-      - name: Build libayatana-appindicator3
+      - name: Build OpenSSL
         run: |
-          mkdir -p build/ayatana && cd build/ayatana
+          wget https://www.openssl.org/source/openssl-3.3.1.tar.gz
+          tar xf openssl-3.3.1.tar.gz
+          cd openssl-3.3.1
+          ./config --prefix=$PREFIX --openssldir=$PREFIX/ssl no-shared
+          make -j$(nproc)
+          make install_sw
+
+      - name: Build libayatana-appindicator
+        run: |
           git clone https://github.com/AyatanaIndicators/libayatana-appindicator.git --depth=1
           cd libayatana-appindicator
           mkdir build && cd build
-          cmake .. -DCMAKE_INSTALL_PREFIX=$PWD/../../../out/ayatana -DCMAKE_BUILD_TYPE=Release
+          cmake .. -DCMAKE_INSTALL_PREFIX=$PREFIX -DCMAKE_BUILD_TYPE=Release
           make -j$(nproc)
           make install
 
-      - name: Package output
+      - name: Package portable bundle
         run: |
-          cd build/out
-          tar czf ../../portable-libs.tar.gz *
+          cd $PREFIX
+          tar czf ${{ github.workspace }}/portable-libs.tar.gz *
 
-      - name: Upload portable libs
+      - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: portable-libs
