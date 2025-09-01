@@ -90,7 +90,7 @@ jobs:
         tar -czvf custom-libs.tar.gz -C $GITHUB_WORKSPACE/local .
 
     - name: 7. Upload Artifact
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: custom-dev-libs
         path: custom-libs.tar.gz
