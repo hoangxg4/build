@@ -87,7 +87,7 @@ jobs:
         export PKG_CONFIG_PATH=$GITHUB_WORKSPACE/local/lib/pkgconfig:$PKG_CONFIG_PATH
         mkdir build
         cd build
-        cmake .. -DCMAKE_INSTALL_PREFIX=$GITHUB_WORKSPACE/local -DENABLE_GTKDOC=OFF
+        cmake .. -DCMAKE_INSTALL_PREFIX=$GITHUB_WORKSPACE/local -DENABLE_GTKDOC=OFF -DENABLE_MONO=OFF
         make -j$(nproc)
         make install
         cd ../..
