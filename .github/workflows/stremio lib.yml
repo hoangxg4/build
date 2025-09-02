@@ -25,7 +25,6 @@ jobs:
           ninja-build \
           cmake \
           valac \
-          libgtk-3-cil-dev \
           libayatana-indicator3-dev \
           libdbusmenu-gtk3-dev \
           libdbusmenu-glib-dev \
@@ -87,13 +86,13 @@ jobs:
         cd libayatana-appindicator-*
         export PKG_CONFIG_PATH=$GITHUB_WORKSPACE/local/lib/pkgconfig:$PKG_CONFIG_PATH
         
-        # Xóa thư mục build cũ để đảm bảo build sạch
+        # Xóa thư mục build cũ để tránh lỗi caching
         rm -rf build
         mkdir build
         cd build
         
-        # <<< XÓA CỜ DISABLE MONO ĐỂ BUILD GTKSHARP
-        cmake .. -DCMAKE_INSTALL_PREFIX=$GITHUB_WORKSPACE/local -DENABLE_GTKDOC=OFF
+        # Thêm cờ -DENABLE_MONO=OFF để bỏ qua build GtkSharp
+        cmake .. -DCMAKE_INSTALL_PREFIX=$GITHUB_WORKSPACE/local -DENABLE_GTKDOC=OFF -DENABLE_MONO=OFF
         
         make -j$(nproc)
         make install
