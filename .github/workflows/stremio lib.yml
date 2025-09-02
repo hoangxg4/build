@@ -24,6 +24,7 @@ jobs:
           meson \
           ninja-build \
           cmake \
+          valac \
           libayatana-indicator3-dev \
           libdbusmenu-gtk3-dev \
           libdbusmenu-glib-dev \
@@ -80,10 +81,8 @@ jobs:
 
     - name: 5. Build and Install libayatana-appindicator (libayatana-appindicator3-dev)
       run: |
-        # <<< SỬ DỤNG CMAKE THEO HƯỚNG DẪN CHÍNH THỨC
         wget https://github.com/AyatanaIndicators/libayatana-appindicator/archive/refs/tags/0.5.93.tar.gz -O libayatana-appindicator-0.5.93.tar.gz
         tar -xf libayatana-appindicator-0.5.93.tar.gz
-        # Sử dụng wildcard (*) để vào đúng thư mục mà không cần biết tên chính xác
         cd libayatana-appindicator-*
         export PKG_CONFIG_PATH=$GITHUB_WORKSPACE/local/lib/pkgconfig:$PKG_CONFIG_PATH
         mkdir build
