@@ -2,13 +2,13 @@ name: Build GTK, SSL, and AppIndicator Libraries
 
 on:
   push:
-    branches: [ main ] # Chạy khi có push lên nhánh main
-  workflow_dispatch:   # Cho phép chạy thủ công từ tab Actions
+    branches: [ main ]
+  workflow_dispatch:
 
 jobs:
   build:
     runs-on: ubuntu-latest
-    container: ubuntu:22.04 # Sử dụng Ubuntu 22.04
+    container: ubuntu:22.04
 
     steps:
     - name: 1. Set up Environment and Install Dependencies
@@ -23,10 +23,10 @@ jobs:
           pkg-config \
           meson \
           ninja-build \
-          autoconf \
-          automake \
-          libtool \
-          gettext \
+          cmake \
+          libayatana-indicator3-dev \
+          libdbusmenu-gtk3-dev \
+          libdbusmenu-glib-dev \
           libglib2.0-dev \
           libdbus-1-dev \
           libgirepository1.0-dev \
@@ -80,17 +80,18 @@ jobs:
 
     - name: 5. Build and Install libayatana-appindicator (libayatana-appindicator3-dev)
       run: |
+        # <<< SỬ DỤNG CMAKE THEO HƯỚNG DẪN CHÍNH THỨC
         wget https://github.com/AyatanaIndicators/libayatana-appindicator/archive/refs/tags/0.5.93.tar.gz -O libayatana-appindicator-0.5.93.tar.gz
         tar -xf libayatana-appindicator-0.5.93.tar.gz
-        cd libayatana-appindicator-0.5.93
+        # Sử dụng wildcard (*) để vào đúng thư mục mà không cần biết tên chính xác
+        cd libayatana-appindicator-*
         export PKG_CONFIG_PATH=$GITHUB_WORKSPACE/local/lib/pkgconfig:$PKG_CONFIG_PATH
-        export CFLAGS="-I$GITHUB_WORKSPACE/local/include"
-        export LDFLAGS="-L$GITHUB_WORKSPACE/local/lib"
-        # <<< QUAY LẠI SỬ DỤNG AUTOTOOLS
-        ./autogen.sh --prefix=$GITHUB_WORKSPACE/local
+        mkdir build
+        cd build
+        cmake .. -DCMAKE_INSTALL_PREFIX=$GITHUB_WORKSPACE/local -DENABLE_GTKDOC=OFF
         make -j$(nproc)
         make install
-        cd ..
+        cd ../..
 
     - name: 6. Archive Compiled Libraries
       run: |
