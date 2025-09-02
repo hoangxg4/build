@@ -85,6 +85,9 @@ jobs:
         tar -xf libayatana-appindicator-0.5.93.tar.gz
         cd libayatana-appindicator-*
         export PKG_CONFIG_PATH=$GITHUB_WORKSPACE/local/lib/pkgconfig:$PKG_CONFIG_PATH
+        
+        # <<< XÓA THƯ MỤC BUILD CŨ ĐỂ TRÁNH LỖI CACHING
+        rm -rf build
         mkdir build
         cd build
         cmake .. -DCMAKE_INSTALL_PREFIX=$GITHUB_WORKSPACE/local -DENABLE_GTKDOC=OFF -DENABLE_MONO=OFF
