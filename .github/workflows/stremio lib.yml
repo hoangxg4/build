@@ -8,7 +8,7 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    container: ubuntu:22.04 # <<< ĐÃ CẬP NHẬT LÊN UBUNTU 22.04
+    container: ubuntu:22.04 # Sử dụng Ubuntu 22.04
 
     steps:
     - name: 1. Set up Environment and Install Dependencies
@@ -45,7 +45,8 @@ jobs:
           libxdamage-dev \
           libwayland-dev \
           wayland-protocols \
-          libxkbcommon-dev
+          libxkbcommon-dev \
+          libatk-bridge2.0-dev # <<< ĐÃ THÊM DEPENDENCY CÒN THIẾU
 
     - name: 2. Create Installation Directory
       run: mkdir -p $GITHUB_WORKSPACE/local
