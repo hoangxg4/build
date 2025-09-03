@@ -1,0 +1,45 @@
+name: Build Stremio Service
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    container:
+      image: debian:12
+
+    steps:
+      - name: Install dependencies
+        run: |
+          apt-get update
+          apt-get install -y git curl build-essential \
+            libgtk-3-dev pkg-config libssl-dev libayatana-appindicator3-dev
+
+      - name: Install Rust
+        run: |
+          curl https://sh.rustup.rs -sSf | sh -s -- -y
+          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+
+      - name: Checkout repository
+        uses: actions/checkout@v5
+        with:
+          repository: Stremio/stremio-service
+          path: src
+
+      - name: Install cargo-deb
+        run: cargo install cargo-deb
+
+      - name: Build release with bundled features
+        working-directory: src
+        run: cargo build --release --features=bundled
+
+      - name: Build .deb package
+        working-directory: src
+        run: cargo deb --no-build --features=bundled
+
+      - name: Upload .deb artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: stremio-service-deb
+          path: src/target/debian/*.deb
