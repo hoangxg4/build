@@ -43,6 +43,8 @@ jobs:
       # Create new tag
       - name: Create new tag
         run: |
+          git config --global user.email "action@github.com"
+          git config --global user.name "Action"
           git tag -a Kotsync -m "Latest Kotsync build"
           git push origin Kotsync --force
 
