@@ -32,6 +32,12 @@ jobs:
           cd kotatsu-syncserver
           ./gradlew shadowJar
 
+      # Configure Git identity (for tagging)
+      - name: Configure Git user
+        run: |
+          git config --global user.email "you@example.com"
+          git config --global user.name "Your Name"
+
       # Delete old release/tag if exist
       - name: Delete old Kotsync release and tag
         env:
@@ -43,8 +49,6 @@ jobs:
       # Create new tag
       - name: Create new tag
         run: |
-          git config --global user.email "action@github.com"
-          git config --global user.name "Action"
           git tag -a Kotsync -m "Latest Kotsync build"
           git push origin Kotsync --force
 
