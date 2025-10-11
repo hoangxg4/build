@@ -35,8 +35,8 @@ jobs:
       # Configure Git identity (for tagging)
       - name: Configure Git user
         run: |
-          git config --global user.email "you@example.com"
-          git config --global user.name "Your Name"
+          git config --global user.email "action@github.com"
+          git config --global user.name "Action"
 
       # Delete old release/tag if exist
       - name: Delete old Kotsync release and tag
