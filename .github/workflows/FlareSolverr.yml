@@ -1,59 +1,73 @@
-name: Manual Build FlareSolverr (Ubuntu 20)
+name: Build FlareSolverr (Debian 11 + Py3.13)
 
 on:
-  workflow_dispatch: # Cho phép chạy thủ công
-    inputs:
-      tag_version:
-        description: 'Phiên bản FlareSolverr muốn build (ví dụ: v3.3.21)'
-        required: true
-        default: 'v3.3.21'
+  workflow_dispatch: # Chạy thủ công
 
-# Cấp quyền cho GITHUB_TOKEN để tạo Release
 permissions:
-  contents: write
+  contents: write # Quyền tạo Release
 
 jobs:
-  build-and-release:
-    name: Build on Ubuntu 20.04
-    runs-on: ubuntu-20.04 # <--- QUAN TRỌNG: Dùng OS cũ để fix lỗi GLIBC
-    
+  build-debian-11:
+    name: Build on Debian 11 (Bullseye)
+    runs-on: ubuntu-latest
+    # Sử dụng Container Debian 11 có sẵn Python 3.13 chính chủ
+    container:
+      image: python:3.13-bullseye
+      options: --user root
+
     steps:
-      - name: Checkout Source Code
+      - name: Install Git & Tools
+        # Cập nhật và cài git để checkout code
+        run: |
+          apt-get update
+          apt-get install -y git zip
+
+      - name: Checkout Latest FlareSolverr
         uses: actions/checkout@v4
         with:
-          repository: FlareSolverr/FlareSolverr # Clone từ repo gốc
-          ref: ${{ inputs.tag_version }}        # Clone đúng tag bạn nhập
-          fetch-depth: 0
+          repository: FlareSolverr/FlareSolverr # Lấy code gốc
+          ref: main                             # Nhánh mới nhất
+          path: src_code
 
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.11" # Khuyên dùng 3.11 để tương thích tốt nhất với Ubuntu 20
-
-      - name: Install Dependencies & Build
+      - name: Build Binary
         run: |
-          echo "Installing requirements..."
-          python -m pip install --upgrade pip
-          python -m pip install -r requirements.txt
-          python -m pip install pyinstaller
+          cd src_code
           
-          echo "Building binary..."
+          echo "Installing Dependencies..."
+          # Đã có sẵn Python 3.13, chạy pip luôn
+          pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pyinstaller
+          
+          echo "Building Package..."
           cd src
           python build_package.py
-          
-          echo "Check output..."
-          ls -lh ../dist/
 
-      - name: Upload to Release
+      - name: Prepare Output
+        id: package
+        run: |
+          cd src_code/dist
+          
+          # Đổi tên file để dễ nhận biết
+          mv flaresolverr_linux_x64 flaresolverr_linux_x64_debian11
+          
+          # Nén file tar.gz
+          tar -czvf flaresolverr_debian11.tar.gz flaresolverr_linux_x64_debian11
+          
+          # Xuất đường dẫn file ra biến môi trường
+          echo "file_path=$(pwd)/flaresolverr_debian11.tar.gz" >> $GITHUB_OUTPUT
+          echo "date_tag=$(date +'%Y.%m.%d-%H%M')" >> $GITHUB_OUTPUT
+
+      - name: Upload Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: build-${{ inputs.tag_version }}-u20 # Tạo tag release mới bên repo của bạn
-          name: FlareSolverr ${{ inputs.tag_version }} (Ubuntu 20.04 Fix)
+          tag_name: debian11-build-${{ steps.package.outputs.date_tag }}
+          name: FlareSolverr (Debian 11 Base - Py3.13)
           body: |
-            Bản build thủ công cho phiên bản ${{ inputs.tag_version }}.
-            Được build trên Ubuntu 20.04 để fix lỗi GLIBC_2.38.
-          files: ./dist/flaresolverr_linux_x64* # Chỉ lấy file Linux
-          draft: false
-          prerelease: false
+            Bản build mới nhất từ nhánh `main`.
+            - **Base OS**: Debian 11 (Bullseye) -> Fix lỗi GLIBC version.
+            - **Python**: 3.13
+            - **Tương thích**: Chạy tốt trên Debian 11, Ubuntu 20.04 và các hệ thống dùng GLIBC 2.31+.
+          files: ${{ steps.package.outputs.file_path }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
