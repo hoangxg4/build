@@ -10,31 +10,33 @@ jobs:
   build-debian-11:
     name: Build on Debian 11 (Bullseye)
     runs-on: ubuntu-latest
-    # Sử dụng Container Debian 11 có sẵn Python 3.13 chính chủ
+    # Sử dụng Container Debian 11 (Bullseye)
     container:
       image: python:3.13-bullseye
       options: --user root
 
     steps:
-      - name: Install Git & Tools
-        # Cập nhật và cài git để checkout code
+      # --- SỬA LỖI Ở ĐÂY: Cài đặt Git TRƯỚC khi Checkout ---
+      - name: Install Git & System Tools
         run: |
           apt-get update
-          apt-get install -y git zip
+          apt-get install -y git zip build-essential
 
+      # Sau khi đã có Git, mới tiến hành tải code
       - name: Checkout Latest FlareSolverr
         uses: actions/checkout@v4
         with:
           repository: FlareSolverr/FlareSolverr # Lấy code gốc
           ref: main                             # Nhánh mới nhất
           path: src_code
+          persist-credentials: false            # QUAN TRỌNG: Tắt lưu token để tránh lỗi permission
+          fetch-depth: 1                        # Chỉ tải commit mới nhất cho nhẹ
 
       - name: Build Binary
         run: |
           cd src_code
           
           echo "Installing Dependencies..."
-          # Đã có sẵn Python 3.13, chạy pip luôn
           pip install --upgrade pip
           pip install -r requirements.txt
           pip install pyinstaller
@@ -48,13 +50,13 @@ jobs:
         run: |
           cd src_code/dist
           
-          # Đổi tên file để dễ nhận biết
+          # Đổi tên file
           mv flaresolverr_linux_x64 flaresolverr_linux_x64_debian11
           
-          # Nén file tar.gz
+          # Nén file
           tar -czvf flaresolverr_debian11.tar.gz flaresolverr_linux_x64_debian11
           
-          # Xuất đường dẫn file ra biến môi trường
+          # Xuất đường dẫn
           echo "file_path=$(pwd)/flaresolverr_debian11.tar.gz" >> $GITHUB_OUTPUT
           echo "date_tag=$(date +'%Y.%m.%d-%H%M')" >> $GITHUB_OUTPUT
 
@@ -62,12 +64,11 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: debian11-build-${{ steps.package.outputs.date_tag }}
-          name: FlareSolverr (Debian 11 Base - Py3.13)
+          name: FlareSolverr (Debian 11 - Py3.13)
           body: |
-            Bản build mới nhất từ nhánh `main`.
-            - **Base OS**: Debian 11 (Bullseye) -> Fix lỗi GLIBC version.
+            Bản build mới nhất.
+            - **OS**: Debian 11 (Bullseye) - Fix lỗi GLIBC.
             - **Python**: 3.13
-            - **Tương thích**: Chạy tốt trên Debian 11, Ubuntu 20.04 và các hệ thống dùng GLIBC 2.31+.
           files: ${{ steps.package.outputs.file_path }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
