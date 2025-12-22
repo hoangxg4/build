@@ -1,0 +1,59 @@
+name: Manual Build FlareSolverr (Ubuntu 20)
+
+on:
+  workflow_dispatch: # Cho phép chạy thủ công
+    inputs:
+      tag_version:
+        description: 'Phiên bản FlareSolverr muốn build (ví dụ: v3.3.21)'
+        required: true
+        default: 'v3.3.21'
+
+# Cấp quyền cho GITHUB_TOKEN để tạo Release
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    name: Build on Ubuntu 20.04
+    runs-on: ubuntu-20.04 # <--- QUAN TRỌNG: Dùng OS cũ để fix lỗi GLIBC
+    
+    steps:
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
+        with:
+          repository: FlareSolverr/FlareSolverr # Clone từ repo gốc
+          ref: ${{ inputs.tag_version }}        # Clone đúng tag bạn nhập
+          fetch-depth: 0
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11" # Khuyên dùng 3.11 để tương thích tốt nhất với Ubuntu 20
+
+      - name: Install Dependencies & Build
+        run: |
+          echo "Installing requirements..."
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+          python -m pip install pyinstaller
+          
+          echo "Building binary..."
+          cd src
+          python build_package.py
+          
+          echo "Check output..."
+          ls -lh ../dist/
+
+      - name: Upload to Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: build-${{ inputs.tag_version }}-u20 # Tạo tag release mới bên repo của bạn
+          name: FlareSolverr ${{ inputs.tag_version }} (Ubuntu 20.04 Fix)
+          body: |
+            Bản build thủ công cho phiên bản ${{ inputs.tag_version }}.
+            Được build trên Ubuntu 20.04 để fix lỗi GLIBC_2.38.
+          files: ./dist/flaresolverr_linux_x64* # Chỉ lấy file Linux
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
