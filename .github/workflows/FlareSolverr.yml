@@ -1,69 +1,72 @@
-name: Build FlareSolverr (Debian 11 - Git Clone)
+name: Build FlareSolverr (Debian 11)
 
 on:
   workflow_dispatch: # Chạy thủ công
 
 permissions:
-  contents: write # Cấp quyền để upload file Release
+  contents: write # Cấp quyền tạo Release
 
 jobs:
-  build-manual-clone:
+  build-final:
     name: Build on Debian 11
     runs-on: ubuntu-latest
     container:
-      image: python:3.13-bullseye # Debian 11 (Fix GLIBC) + Python 3.13
+      image: python:3.13-bullseye # Môi trường Debian 11 + Python 3.13 (Fix GLIBC)
       options: --user root
 
     steps:
       - name: Install System Tools
-        # Cập nhật và cài git để chạy lệnh clone
         run: |
           apt-get update
-          apt-get install -y git zip
+          apt-get install -y git zip tar build-essential
 
       - name: Manual Clone Repository
-        # Thay thế actions/checkout bằng lệnh clone đơn giản
         run: |
           echo "Cloning FlareSolverr..."
+          # Clone code về thư mục src_code
           git clone --depth 1 https://github.com/FlareSolverr/FlareSolverr.git src_code
 
-      - name: Install & Build
+      - name: Install Dependencies & Build
         run: |
           cd src_code
           
-          echo "Installing Python Dependencies..."
+          echo "Installing Python Libraries..."
           pip install --upgrade pip
           pip install -r requirements.txt
           pip install pyinstaller
           
-          echo "Building Binary..."
+          echo "Running build script..."
           cd src
+          # Script này sẽ tự làm tất cả: Tải Chrome -> Build -> Nén thành .tar.gz
           python build_package.py
 
-      - name: Compress & Prepare
+      - name: Prepare Artifact
         id: prepare_files
         run: |
           cd src_code/dist
           
-          # Đổi tên file để phân biệt
-          mv flaresolverr_linux_x64 flaresolverr_linux_x64_debian11
+          echo "Kiểm tra file được tạo ra:"
+          ls -lah
           
-          # Nén file tar.gz
-          tar -czvf flaresolverr_debian11.tar.gz flaresolverr_linux_x64_debian11
+          # File do Python tạo ra tên là: flaresolverr_linux_x64.tar.gz
+          # Chúng ta đổi tên nó thành tên bạn muốn
+          mv flaresolverr_linux_x64.tar.gz flaresolverr_debian11.tar.gz
           
-          # Lưu đường dẫn và tạo tag
+          # Xuất đường dẫn file
           echo "file_path=$(pwd)/flaresolverr_debian11.tar.gz" >> $GITHUB_OUTPUT
+          
+          # Tạo tag theo thời gian
           echo "date_tag=$(date +'%Y.%m.%d-%H%M')" >> $GITHUB_OUTPUT
 
       - name: Upload Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: build-${{ steps.prepare_files.outputs.date_tag }}
-          name: FlareSolverr (Debian 11 Fix - Py3.13)
+          name: FlareSolverr (Debian 11 - Py3.13)
           body: |
-            Bản build thủ công từ source mới nhất.
-            - **Cách build**: Git Clone trực tiếp + Docker Debian 11.
-            - **Hệ điều hành**: Debian 11 (GLIBC cũ -> Chạy được trên mọi VPS).
+            Bản build tự động từ source gốc.
+            - **Cơ chế**: Dùng script `build_package.py` gốc.
+            - **Hệ điều hành**: Debian 11 (Bullseye) -> Fix lỗi GLIBC 2.38.
             - **Python**: 3.13.
           files: ${{ steps.prepare_files.outputs.file_path }}
         env:
