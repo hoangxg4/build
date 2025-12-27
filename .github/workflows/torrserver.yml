@@ -15,11 +15,11 @@ jobs:
       - name: Checkout Own Repo
         uses: actions/checkout@v4
 
-      # 1. Cài đặt môi trường theo yêu cầu: Go + Node
-      - name: Setup Environment
+      # 1. Setup Environment
+      - name: Setup Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.23' # Go mới nhất
+          go-version: '1.23'
           cache: false
       
       - name: Setup Node.js
@@ -27,13 +27,12 @@ jobs:
         with:
           node-version: '20'
 
-      # 2. Clone Source Code
+      # 2. Clone Source
       - name: Clone TorrServer
         run: |
           git clone https://github.com/YouROK/TorrServer.git upstream_source
-          echo "Clone thành công!"
 
-      # 3. BUILD WEB (Theo hướng dẫn: Install npm/yarn -> Go to web -> Run build)
+      # 3. BUILD WEB (Chạy trong folder web)
       - name: Build Web UI
         run: |
           cd upstream_source/web
@@ -42,45 +41,45 @@ jobs:
           yarn install
           
           echo "Building React App..."
-          # Fix lỗi warning=error và openssl
           export CI=false 
           export NODE_OPTIONS=--openssl-legacy-provider
           yarn build
 
-      # 4. CHUẨN BỊ SERVER (Tạo file nhúng Web vào Go)
+      # 4. CHUẨN BỊ SERVER (Phần này quan trọng: phải đúng đường dẫn)
       - name: Prepare Server Assets
         run: |
-          cd upstream_source
-          
-          # Fix lỗi thiếu module (quan trọng)
-          echo "Tidy up modules..."
-          go mod tidy
-          
-          # Cài tool tạo docs
+          # A. Cài Swag (tool này cài global nên chạy ở đâu cũng được)
           go install github.com/swaggo/swag/cmd/swag@latest
           
-          # Nhúng giao diện Web vừa build vào code Go
+          # B. Chạy gen_web.go (File này nằm ở root, nó lấy web/build nhét vào server/)
+          cd upstream_source
           echo "Embedding Web to Go..."
           go run gen_web.go
           
-          # Tạo Docs
+          # C. Chui vào folder 'server' để tải thư viện và tạo docs
+          cd server
+          
+          echo "Tidy up modules inside server folder..."
+          # Fix lỗi: go.mod nằm ở đây nên phải chạy tidy ở đây
+          go mod tidy
+          
           echo "Generating Docs..."
-          (cd server && swag init -g web/server.go)
+          # Tạo docs dựa trên code trong folder server
+          swag init -g web/server.go
 
-      # 5. BUILD SERVER (Dùng script build-all.sh của tác giả)
+      # 5. BUILD SERVER (Dùng script build-all.sh ở root)
       - name: Execute Build Script
         run: |
           cd upstream_source
           
-          # Mẹo: Sửa file build-all.sh để chỉ build AMD64 và ARM64 (cho nhanh)
-          # Thay thế danh sách platforms dài loằng ngoằng bằng 2 cái ta cần
+          # Sửa script build-all.sh: Chỉ giữ lại amd64 và arm64
+          # Dòng sed này tìm mảng platforms và thay thế nó
           sed -i 's/platforms=(.*)/platforms=("linux\/amd64" "linux\/arm64")/' build-all.sh
           
-          # Cấp quyền chạy script
+          # Cấp quyền chạy
           chmod +x build-all.sh
           
           echo "Running official build script..."
-          # Script này sẽ tự tạo thư mục release/ và file binaries bên trong
           ./build-all.sh
           
           echo "Kết quả build:"
@@ -92,7 +91,6 @@ jobs:
         with:
           tag_name: torrserver-latest
           name: TorrServer Latest
-          # Script build-all.sh thường nhả file vào thư mục release/
           files: upstream_source/release/*
           draft: false
           prerelease: false
