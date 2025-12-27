@@ -66,7 +66,7 @@ jobs:
           tag_name: torrserver-latest
           
           # Tiêu đề thay đổi theo ngày để dễ nhận biết
-          name: TorrServer Auto Build (Cập nhật: ${{ github.event.repository.updated_at }})
+          name: TorrServer Auto Build
           
           files: dist/*
           
