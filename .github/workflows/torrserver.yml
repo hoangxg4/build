@@ -1,4 +1,4 @@
-name: Build TorrServer (Official Way - Fixed)
+name: Build TorrServer (Final Fix)
 
 on:
   workflow_dispatch:
@@ -7,15 +7,14 @@ permissions:
   contents: write
 
 jobs:
-  build-official:
-    name: Full Build (Web + Server)
+  build-final:
+    name: Build TorrServer
     runs-on: ubuntu-latest
     
     steps:
       - name: Checkout Own Repo
         uses: actions/checkout@v4
 
-      # 1. Setup Environment
       - name: Setup Go
         uses: actions/setup-go@v5
         with:
@@ -27,80 +26,74 @@ jobs:
         with:
           node-version: '20'
 
-      # 2. Clone Source
-      - name: Clone TorrServer
+      - name: Clone Source
         run: |
           git clone https://github.com/YouROK/TorrServer.git upstream_source
 
-      # 3. BUILD WEB UI
+      # 1. BUILD WEB UI
       - name: Build Web UI
         run: |
           cd upstream_source/web
-          
-          echo "Installing Yarn dependencies..."
           yarn install
-          
-          echo "Building React App..."
           export CI=false 
           export NODE_OPTIONS=--openssl-legacy-provider
           yarn build
 
-      # 4. CHUẨN BỊ SERVER (Embed Web & Tạo Docs)
+      # 2. CHUẨN BỊ SERVER
       - name: Prepare Server Assets
         run: |
-          # A. Cài Swag
           go install github.com/swaggo/swag/cmd/swag@latest
           
-          # B. Embed Web vào Go (chạy ở root)
+          # Nhúng web vào code (File này ở root)
           cd upstream_source
-          echo "Embedding Web to Go..."
           go run gen_web.go
           
-          # C. Tải thư viện & Tạo Docs (chạy trong server/)
+          # Vào folder server để chuẩn bị thư viện
           cd server
-          echo "Syncing modules..."
+          echo "Syncing modules inside server..."
           go mod tidy
           
           echo "Generating Swagger Docs..."
           swag init -g web/server.go
 
-      # 5. BUILD SERVER (Ghi đè script build-all.sh để bỏ qua Android)
+      # 3. BUILD BINARY (Đã sửa lỗi đường dẫn tại đây)
       - name: Execute Build Script
         run: |
           cd upstream_source
           
-          # TẠO FILE BUILD-ALL.SH MỚI
-          # Lý do: Script gốc bắt buộc phải có Android NDK (gây lỗi).
-          # Ta viết lại script này chỉ để build Linux nhưng giữ nguyên flags xịn của tác giả.
-          cat <<EOF > build-all.sh
-          #!/bin/bash
+          # Tạo thư mục chứa file kết quả
           mkdir -p dist
           
-          # Flags chuẩn lấy từ log của tác giả
+          # Tạo script build mới
+          cat <<EOF > build-all.sh
+          #!/bin/bash
+          
+          # QUAN TRỌNG: Phải chui vào folder 'server' nơi chứa go.mod
+          cd server || exit
+          
           LDFLAGS="-s -w -checklinkname=0 -extldflags '-static'"
           TAGS="nosqlite"
           
           echo "--- Building Linux AMD64 ---"
-          GOOS=linux GOARCH=amd64 go build -ldflags="\$LDFLAGS" -tags=\$TAGS -trimpath -o dist/TorrServer-linux-amd64 ./cmd
+          # Output ra ../dist (tức là thư mục dist ở root)
+          GOOS=linux GOARCH=amd64 go build -ldflags="\$LDFLAGS" -tags=\$TAGS -trimpath -o ../dist/TorrServer-linux-amd64 ./cmd
           
           echo "--- Building Linux ARM64 ---"
-          GOOS=linux GOARCH=arm64 go build -ldflags="\$LDFLAGS" -tags=\$TAGS -trimpath -o dist/TorrServer-linux-arm64 ./cmd
+          GOOS=linux GOARCH=arm64 go build -ldflags="\$LDFLAGS" -tags=\$TAGS -trimpath -o ../dist/TorrServer-linux-arm64 ./cmd
           
-          echo "Build Complete. Files in dist/:"
-          ls -lh dist
+          echo "Build Complete. Files in root dist/:"
+          ls -lh ../dist
           EOF
           
-          # Cấp quyền và chạy
           chmod +x build-all.sh
           ./build-all.sh
 
-      # 6. Upload file
-      - name: Update Fixed Release
+      # 4. Upload file từ thư mục dist đã tạo
+      - name: Update Release
         uses: softprops/action-gh-release@v1
         with:
           tag_name: torrserver-latest
           name: TorrServer Latest
-          # Lưu ý: Script của tác giả output ra thư mục 'dist', không phải 'release'
           files: upstream_source/dist/*
           draft: false
           prerelease: false
