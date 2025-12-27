@@ -23,11 +23,24 @@ jobs:
 
       - name: Clone Upstream TorrServer
         run: |
+          # Clone source
           git clone https://github.com/YouROK/TorrServer.git upstream_source
           
+          # Di chuyển vào thư mục source
           cd upstream_source
+          
+          # [DEBUG] Kiểm tra file go.mod có tồn tại không
+          ls -la go.mod
+          
+          # Cài đặt Swag
           go install github.com/swaggo/swag/cmd/swag@latest
           
+          # [QUAN TRỌNG] Đồng bộ dependencies để tránh lỗi "cannot find main module"
+          echo "Syncing modules..."
+          go mod download
+          go mod tidy
+          
+          # Tạo Web UI
           export CI=false
           export NODE_OPTIONS=--openssl-legacy-provider
           
@@ -35,9 +48,8 @@ jobs:
           go run gen_web.go
           
           echo "Generating Docs..."
-          cd server
-          swag init -g web/server.go
-          cd ..
+          # Dùng ngoặc đơn () để chạy trong subshell, không ảnh hưởng thư mục chính
+          (cd server && swag init -g web/server.go)
 
       - name: Build Static Binaries (AMD64 & ARM64)
         run: |
@@ -46,7 +58,7 @@ jobs:
           
           PLATFORMS=('linux/amd64' 'linux/arm64')
 
-          # Đã sửa: Định nghĩa LDFLAGS rõ ràng
+          # Cờ biên dịch chuẩn
           LDFLAGS="-s -w -extldflags '-static' -checklinkname=0"
           
           for PLATFORM in "${PLATFORMS[@]}"; do
@@ -57,7 +69,7 @@ jobs:
              
              echo "Building $BIN_NAME ..."
              
-             # Đã sửa: Truyền tham số trực tiếp, không dùng biến BUILD_FLAGS để tránh lỗi quote
+             # Chạy build trực tiếp, đảm bảo biến môi trường CGO=0
              env GOOS=$GOOS GOARCH=$GOARCH CGO_ENABLED=0 go build \
                -ldflags "$LDFLAGS" \
                -tags=nosqlite \
@@ -66,6 +78,7 @@ jobs:
                ./cmd
           done
           
+          # Kiểm tra kết quả
           ls -lh ../dist
 
       - name: Update Fixed Release
