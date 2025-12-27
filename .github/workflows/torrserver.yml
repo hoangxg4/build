@@ -1,4 +1,4 @@
-name: Build TorrServer (Fixed Tag: torrserver-latest)
+name: Build TorrServer
 
 on:
   workflow_dispatch: # Chạy thủ công
