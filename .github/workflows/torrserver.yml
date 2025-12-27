@@ -1,10 +1,10 @@
 name: Build TorrServer
 
 on:
-  workflow_dispatch: # Chạy thủ công
+  workflow_dispatch:
 
 permissions:
-  contents: write # Cần quyền để xóa/ghi đè Release
+  contents: write
 
 jobs:
   build-fixed-tag:
@@ -18,7 +18,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.23' # Giữ Go 1.23 để hỗ trợ os.CopyFS
+          go-version: '1.23'
           cache: false
 
       - name: Clone Upstream TorrServer
@@ -28,7 +28,6 @@ jobs:
           cd upstream_source
           go install github.com/swaggo/swag/cmd/swag@latest
           
-          # Fix lỗi React build treat warning as error
           export CI=false
           export NODE_OPTIONS=--openssl-legacy-provider
           
@@ -45,11 +44,10 @@ jobs:
           cd upstream_source
           mkdir -p ../dist
           
-          # Chỉ build 2 nền tảng này
           PLATFORMS=('linux/amd64' 'linux/arm64')
 
+          # Đã sửa: Định nghĩa LDFLAGS rõ ràng
           LDFLAGS="-s -w -extldflags '-static' -checklinkname=0"
-          BUILD_FLAGS="-ldflags=\"${LDFLAGS}\" -tags=nosqlite -trimpath"
           
           for PLATFORM in "${PLATFORMS[@]}"; do
              GOOS=${PLATFORM%/*}
@@ -58,7 +56,14 @@ jobs:
              BIN_NAME="TorrServer-${GOOS}-${GOARCH}"
              
              echo "Building $BIN_NAME ..."
-             env GOOS=$GOOS GOARCH=$GOARCH CGO_ENABLED=0 go build $BUILD_FLAGS -o "../dist/${BIN_NAME}" ./cmd
+             
+             # Đã sửa: Truyền tham số trực tiếp, không dùng biến BUILD_FLAGS để tránh lỗi quote
+             env GOOS=$GOOS GOARCH=$GOARCH CGO_ENABLED=0 go build \
+               -ldflags "$LDFLAGS" \
+               -tags=nosqlite \
+               -trimpath \
+               -o "../dist/${BIN_NAME}" \
+               ./cmd
           done
           
           ls -lh ../dist
