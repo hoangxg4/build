@@ -8,7 +8,7 @@ permissions:
 
 jobs:
   build-fixed-tag:
-    name: Build & Update Fixed Tag
+    name: Build & Update
     runs-on: ubuntu-latest
     
     steps:
@@ -18,7 +18,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.23'
+          go-version: '1.23' # Giữ Go 1.23 để hỗ trợ os.CopyFS
           cache: false
 
       - name: Clone Upstream TorrServer
@@ -28,9 +28,14 @@ jobs:
           cd upstream_source
           go install github.com/swaggo/swag/cmd/swag@latest
           
+          # Fix lỗi React build treat warning as error
+          export CI=false
           export NODE_OPTIONS=--openssl-legacy-provider
+          
+          echo "Generating Web UI..."
           go run gen_web.go
           
+          echo "Generating Docs..."
           cd server
           swag init -g web/server.go
           cd ..
@@ -50,7 +55,6 @@ jobs:
              GOOS=${PLATFORM%/*}
              GOARCH=${PLATFORM#*/}
              
-             # Tên file giữ nguyên (không thêm version) để dễ ghi đè
              BIN_NAME="TorrServer-${GOOS}-${GOARCH}"
              
              echo "Building $BIN_NAME ..."
@@ -62,17 +66,11 @@ jobs:
       - name: Update Fixed Release
         uses: softprops/action-gh-release@v1
         with:
-          # TAG CỐ ĐỊNH: Bắt đầu bằng torrserver
           tag_name: torrserver-latest
-          
-          # Tiêu đề thay đổi theo ngày để dễ nhận biết
-          name: TorrServer Auto Build
-          
+          name: TorrServer Latest
           files: dist/*
-          
-          # Các tùy chọn để ghi đè bản cũ
           draft: false
           prerelease: false
-          overwrite: true # Quan trọng: Cho phép ghi đè file cũ
+          overwrite: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
