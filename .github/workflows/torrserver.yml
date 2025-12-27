@@ -1,0 +1,78 @@
+name: Build TorrServer (Fixed Tag: torrserver-latest)
+
+on:
+  workflow_dispatch: # Chạy thủ công
+
+permissions:
+  contents: write # Cần quyền để xóa/ghi đè Release
+
+jobs:
+  build-fixed-tag:
+    name: Build & Update Fixed Tag
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout Own Repo
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+          cache: false
+
+      - name: Clone Upstream TorrServer
+        run: |
+          git clone https://github.com/YouROK/TorrServer.git upstream_source
+          
+          cd upstream_source
+          go install github.com/swaggo/swag/cmd/swag@latest
+          
+          export NODE_OPTIONS=--openssl-legacy-provider
+          go run gen_web.go
+          
+          cd server
+          swag init -g web/server.go
+          cd ..
+
+      - name: Build Static Binaries (AMD64 & ARM64)
+        run: |
+          cd upstream_source
+          mkdir -p ../dist
+          
+          # Chỉ build 2 nền tảng này
+          PLATFORMS=('linux/amd64' 'linux/arm64')
+
+          LDFLAGS="-s -w -extldflags '-static' -checklinkname=0"
+          BUILD_FLAGS="-ldflags=\"${LDFLAGS}\" -tags=nosqlite -trimpath"
+          
+          for PLATFORM in "${PLATFORMS[@]}"; do
+             GOOS=${PLATFORM%/*}
+             GOARCH=${PLATFORM#*/}
+             
+             # Tên file giữ nguyên (không thêm version) để dễ ghi đè
+             BIN_NAME="TorrServer-${GOOS}-${GOARCH}"
+             
+             echo "Building $BIN_NAME ..."
+             env GOOS=$GOOS GOARCH=$GOARCH CGO_ENABLED=0 go build $BUILD_FLAGS -o "../dist/${BIN_NAME}" ./cmd
+          done
+          
+          ls -lh ../dist
+
+      - name: Update Fixed Release
+        uses: softprops/action-gh-release@v1
+        with:
+          # TAG CỐ ĐỊNH: Bắt đầu bằng torrserver
+          tag_name: torrserver-latest
+          
+          # Tiêu đề thay đổi theo ngày để dễ nhận biết
+          name: TorrServer Auto Build (Cập nhật: ${{ github.event.repository.updated_at }})
+          
+          files: dist/*
+          
+          # Các tùy chọn để ghi đè bản cũ
+          draft: false
+          prerelease: false
+          overwrite: true # Quan trọng: Cho phép ghi đè file cũ
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
