@@ -10,23 +10,6 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout Kernel Source
-        uses: actions/checkout@v4
-        with:
-          repository: LineageOS/android_kernel_samsung_a71
-          ref: lineage-23.2
-          path: kernel
-
-      - name: Download and Setup Clang 23
-        run: |
-          mkdir -p toolchain/clang
-          # Tải bản Clang 23 bạn vừa đưa
-          wget https://github.com/ZyCromerZ/Clang/releases/download/23.0.0git-20260130-release/Clang-23.0.0git-20260130.tar.gz
-          # Giải nén vào thư mục toolchain
-          tar -C toolchain/clang -zxf Clang-23.0.0git-20260130.tar.gz
-          # Thêm vào PATH để Action có thể gọi
-          echo "$(pwd)/toolchain/clang/bin" >> $GITHUB_PATH
-
       - name: Build Kernel
         uses: dabao1955/kernel_build_action@main
         with:
@@ -35,21 +18,23 @@ jobs:
           config: a71_defconfig
           arch: arm64
           
-          # DOCKER SUPPORT
+          # HỖ TRỢ DOCKER (LXC)
           lxc: true
           lxc-patch: true
           
-          # TẮT TẢI TỰ ĐỘNG VÌ TA ĐÃ SETUP THỦ CÔNG Ở TRÊN
-          aosp-clang: false
-          aosp-gcc: false
+          # SỬ DỤNG CLANG CHÍNH CHỦ GOOGLE
+          aosp-clang: true
+          # Phiên bản theo tài liệu bạn gửi cho Android 16
+          aosp-clang-version: r547379 
           
-          # CHỈ ĐỊNH ĐƯỜNG DẪN CLANG ĐÃ GIẢI NÉN
-          other-clang-url: $(pwd)/toolchain/clang
+          # SỬ DỤNG GCC MỒI (Bắt buộc phải có để script không lỗi)
+          aosp-gcc: true
+          # Vì Android 16 không có GCC, ta mồi bằng bản Android 12 ổn định nhất
+          android-version: 12 
           
-          android-version: 16
           anykernel3: true
           release: true
           access-token: ${{ secrets.GITHUB_TOKEN }}
           
-          # ÉP BIÊN DỊCH BẰNG LLVM CỰC MẠNH (Dùng Clang 23 làm chủ đạo)
+          # BIẾN MÔI TRƯỜNG ĐỂ ÉP DÙNG LLVM TRONG ANDROID 16
           extra-make-args: '["LLVM=1", "LLVM_IAS=1", "CC=clang", "LD=ld.lld", "AR=llvm-ar", "NM=llvm-nm", "STRIP=llvm-strip", "OBJCOPY=llvm-objcopy", "OBJDUMP=llvm-objdump"]'
