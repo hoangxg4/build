@@ -10,6 +10,27 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
+      - name: Setup Environment
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y curl git tar
+
+      - name: Download Clang r547379 from Google
+        run: |
+          mkdir -p ${{ github.workspace }}/my-clang
+          # Tải bản r547379 chính chủ Android 16 (Dạng archive để né lỗi 400)
+          curl -L https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/refs/heads/main/clang-r547379.tar.gz -o clang.tar.gz
+          tar -C ${{ github.workspace }}/my-clang -zxf clang.tar.gz
+          
+          # Biến thư mục này thành một Git Repo cục bộ để 'kernel_build_action' chấp nhận
+          cd ${{ github.workspace }}/my-clang
+          git init
+          git config user.email "bot@action.com"
+          git config user.name "Builder"
+          git add .
+          git commit -m "Initial Clang r547379"
+          git branch -m master
+
       - name: Build Kernel
         uses: dabao1955/kernel_build_action@main
         with:
@@ -18,16 +39,16 @@ jobs:
           config: a71_defconfig
           arch: arm64
           
-          # TẮT LXC TỰ ĐỘNG ĐỂ TRANH LỖI CẤU TRÚC SCHED (cstate)
+          # QUAN TRỌNG: Tắt lxc tự động để tránh lỗi 'cstate' trong mã nguồn Samsung
           lxc: false
           lxc-patch: false
           
-          # SỬ DỤNG MIRROR CRDROID - Tên nhánh chính xác: 14.0
+          # Trỏ vào Repo Clang chúng ta vừa tự tạo ở trên
           aosp-clang: false
-          other-clang-url: https://gitlab.com/crdroidandroid/android_prebuilts_clang_host_linux-x86_clang-r530567.git
-          other-clang-branch: 14.0
+          other-clang-url: ${{ github.workspace }}/my-clang
+          other-clang-branch: master
           
-          # SETUP GCC MỒI (Android 12)
+          # GCC mồi (Dùng Android 12 để né lỗi 128)
           aosp-gcc: true
           android-version: 12
           
@@ -35,5 +56,5 @@ jobs:
           release: true
           access-token: ${{ secrets.GITHUB_TOKEN }}
           
-          # THAM SỐ ÉP BIÊN DỊCH & TẮT WARNING
+          # Ép dùng Clang và bỏ qua các lỗi cú pháp Samsung
           extra-make-args: '["LLVM=1", "LLVM_IAS=1", "KCFLAGS=-w", "CC=clang", "LD=ld.lld"]'
