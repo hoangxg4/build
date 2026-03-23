@@ -22,19 +22,26 @@ jobs:
           lxc: true
           lxc-patch: true
           
-          # SỬ DỤNG CLANG CHÍNH CHỦ GOOGLE
-          aosp-clang: true
-          # Phiên bản theo tài liệu bạn gửi cho Android 16
-          aosp-clang-version: r547379 
+          # TẮT TẢI TỰ ĐỘNG (ĐỂ TRÁNH LỖI 400)
+          aosp-clang: false
+          aosp-gcc: false
           
-          # SỬ DỤNG GCC MỒI (Bắt buộc phải có để script không lỗi)
-          aosp-gcc: true
-          # Vì Android 16 không có GCC, ta mồi bằng bản Android 12 ổn định nhất
-          android-version: 12 
+          # DÙNG MIRROR CỦA MICROSOFT CHO CLANG R547379
+          # Script sẽ clone toàn bộ repo này (khá nặng, nhưng rất chuẩn)
+          other-clang-url: https://github.com/msft-mirror-aosp/platform.prebuilts.clang.host.linux-x86.git
+          other-clang-branch: master
           
+          # DÙNG GCC MỒI TỪ LINEAGEOS (ỔN ĐỊNH CHO ARM64)
+          other-gcc64-url: https://github.com/LineageOS/android_prebuilts_gcc_linux-x86_aarch64_aarch64-linux-android-4.9
+          other-gcc64-branch: lineage-19.1
+          other-gcc32-url: https://github.com/LineageOS/android_prebuilts_gcc_linux-x86_arm_arm-linux-androideabi-4.9
+          other-gcc32-branch: lineage-19.1
+          
+          android-version: 16
           anykernel3: true
           release: true
           access-token: ${{ secrets.GITHUB_TOKEN }}
           
-          # BIẾN MÔI TRƯỜNG ĐỂ ÉP DÙNG LLVM TRONG ANDROID 16
-          extra-make-args: '["LLVM=1", "LLVM_IAS=1", "CC=clang", "LD=ld.lld", "AR=llvm-ar", "NM=llvm-nm", "STRIP=llvm-strip", "OBJCOPY=llvm-objcopy", "OBJDUMP=llvm-objdump"]'
+          # THAM SỐ ÉP SỬ DỤNG CLANG R547379 TRONG THƯ MỤC VỪA TẢI
+          # Lưu ý: Cần trỏ CC đến đúng đường dẫn mà script giải nén (thường là /home/runner/clang/clang-r547379/bin/clang)
+          extra-make-args: '["LLVM=1", "LLVM_IAS=1", "CC=clang", "CLANG_TRIPLE=aarch64-linux-gnu-", "CROSS_COMPILE=aarch64-linux-android-", "CROSS_COMPILE_ARM32=arm-linux-androideabi-", "KCFLAGS=-w"]'
