@@ -18,14 +18,14 @@ jobs:
           config: a71_defconfig
           arch: arm64
           
-          # TẮT LXC TỰ ĐỘNG ĐỂ TRÁNH LỖI CẤU TRÚC MÃ NGUỒN (cstate error)
+          # TẮT LXC TỰ ĐỘNG ĐỂ TRANH LỖI CẤU TRÚC SCHED (cstate)
           lxc: false
           lxc-patch: false
           
-          # SỬ DỤNG MIRROR CRDROID NHÁNH 14
+          # SỬ DỤNG MIRROR CRDROID - Tên nhánh chính xác: 14.0
           aosp-clang: false
           other-clang-url: https://gitlab.com/crdroidandroid/android_prebuilts_clang_host_linux-x86_clang-r530567.git
-          other-clang-branch: 14.0 # Đã sửa từ 15 thành 14
+          other-clang-branch: 14.0
           
           # SETUP GCC MỒI (Android 12)
           aosp-gcc: true
@@ -35,5 +35,5 @@ jobs:
           release: true
           access-token: ${{ secrets.GITHUB_TOKEN }}
           
-          # THAM SỐ ÉP BIÊN DỊCH
+          # THAM SỐ ÉP BIÊN DỊCH & TẮT WARNING
           extra-make-args: '["LLVM=1", "LLVM_IAS=1", "KCFLAGS=-w", "CC=clang", "LD=ld.lld"]'
