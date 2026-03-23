@@ -40,7 +40,7 @@ jobs:
           arch: arm64
           
           # QUAN TRỌNG: Tắt lxc tự động để tránh lỗi 'cstate' trong mã nguồn Samsung
-          lxc: false
+          lxc: true
           lxc-patch: false
           
           # Trỏ vào Repo Clang chúng ta vừa tự tạo ở trên
