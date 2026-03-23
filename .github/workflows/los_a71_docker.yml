@@ -1,4 +1,4 @@
-name: Build Kernel A71 Docker Android 16
+name: Build Kernel A71 Android 16 Docker
 
 on:
   workflow_dispatch:
@@ -19,20 +19,31 @@ jobs:
           config: a71_defconfig
           arch: arm64
           
-          # DOCKER & LXC SUPPORT
+          # HỖ TRỢ DOCKER
           lxc: true
           lxc-patch: true
           
-          # TOOLCHAIN CONFIG (FIX LỖI GCC)
-          aosp-gcc: true
-          # Quan trọng: Ép lấy GCC bản 12 vì bản 16 không tồn tại trên server Google
-          gcc-branch: android12-release 
+          # TẮT TỰ ĐỘNG TẢI (VÌ ĐANG LỖI 400)
+          aosp-clang: false
+          aosp-gcc: false
           
-          aosp-clang: true
-          android-version: 12 # Đổi cái này thành 12 để script tải được cả Clang + GCC 12 ổn định
-          aosp-clang-version: r530567 # Nhưng vẫn ép dùng bản Clang mới nhất cho Android 16
+          # DÙNG LINK TOOLCHAIN THỦ CÔNG (SỬ DỤNG CLANG 17+ CHO ANDROID 16)
+          # Sử dụng Proton Clang hoặc Azure Clang - Rất ổn định cho Kernel Android
+          other-clang-url: https://github.com/kdrag0n/proton-clang.git
+          other-clang-branch: master
           
-          # PACKAGING
+          # DÙNG GCC ĐỂ MỒI (BUILD CHO ARM64)
+          other-gcc64-url: https://github.com/mvaisakh/gcc-arm64.git
+          other-gcc64-branch: master
+          
+          # DÙNG GCC CHO ARM32 (CẦN CHO CÁC MODULE WIFI/MẠNG)
+          other-gcc32-url: https://github.com/mvaisakh/gcc-arm.git
+          other-gcc32-branch: master
+          
+          android-version: 16
           anykernel3: true
           release: true
           access-token: ${{ secrets.GITHUB_TOKEN }}
+          
+          # THÊM BIẾN ĐỂ ÉP BIÊN DỊCH BẰNG LLVM (CHỐNG LỖI)
+          extra-make-args: '["LLVM=1", "LLVM_IAS=1"]'
