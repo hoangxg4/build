@@ -19,31 +19,27 @@ jobs:
           config: a71_defconfig
           arch: arm64
           
-          # HỖ TRỢ DOCKER
+          # HỖ TRỢ DOCKER/LXC (Action sẽ tự động bật CONFIG_...)
           lxc: true
           lxc-patch: true
           
-          # TẮT TỰ ĐỘNG TẢI (VÌ ĐANG LỖI 400)
+          # TẮT TẢI TỪ GOOGLE (ĐỂ TRÁNH LỖI 400)
           aosp-clang: false
           aosp-gcc: false
           
-          # DÙNG LINK TOOLCHAIN THỦ CÔNG (SỬ DỤNG CLANG 17+ CHO ANDROID 16)
-          # Sử dụng Proton Clang hoặc Azure Clang - Rất ổn định cho Kernel Android
-          other-clang-url: https://github.com/kdrag0n/proton-clang.git
-          other-clang-branch: master
+          # SỬ DỤNG ZYC CLANG (Bản này cực kỳ ổn định, có sẵn GCC bên trong)
+          other-clang-url: https://github.com/ZyCromerZ/Clang.git
+          other-clang-branch: 19 # Bản Clang 19 mới nhất cho Android 16
           
-          # DÙNG GCC ĐỂ MỒI (BUILD CHO ARM64)
-          other-gcc64-url: https://github.com/mvaisakh/gcc-arm64.git
-          other-gcc64-branch: master
-          
-          # DÙNG GCC CHO ARM32 (CẦN CHO CÁC MODULE WIFI/MẠNG)
-          other-gcc32-url: https://github.com/mvaisakh/gcc-arm.git
-          other-gcc32-branch: master
+          # VÌ ZYC CLANG ĐÃ CÓ SẴN GCC NÊN KHÔNG CẦN KHAI BÁO THÊM GCC LẺ
+          # NHƯNG SCRIPT YÊU CẦU INPUT NÊN TA ĐỂ TRỐNG HOẶC TRỎ VÀO CHÍNH NÓ
+          other-gcc64-url: https://github.com/ZyCromerZ/Clang.git
+          other-gcc64-branch: 19
           
           android-version: 16
           anykernel3: true
           release: true
           access-token: ${{ secrets.GITHUB_TOKEN }}
           
-          # THÊM BIẾN ĐỂ ÉP BIÊN DỊCH BẰNG LLVM (CHỐNG LỖI)
-          extra-make-args: '["LLVM=1", "LLVM_IAS=1"]'
+          # ÉP BIÊN DỊCH BẰNG LLVM ĐỂ TỐI ƯU CHO ANDROID 16
+          extra-make-args: '["LLVM=1", "LLVM_IAS=1", "LD=ld.lld", "AR=llvm-ar", "NM=llvm-nm", "OBJCOPY=llvm-objcopy", "OBJDUMP=llvm-objdump", "STRIP=llvm-strip"]'
