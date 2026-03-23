@@ -1,4 +1,4 @@
-name: Build Kernel A71 Android 16 Docker
+name: Build Kernel A71 Docker Android 16
 
 on:
   workflow_dispatch:
@@ -7,45 +7,28 @@ permissions:
   contents: write
 
 jobs:
-  build:
+  build-kernel:
+    name: Build Kernel
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout Source
-        uses: actions/checkout@v4
-        with:
-          repository: LineageOS/android_kernel_samsung_a71
-          ref: lineage-23.2
-          path: kernel
-
-      - name: Setup Docker-Ready Config
-        run: |
-          cd kernel
-          CONF="arch/arm64/configs/a71_defconfig"
-          # Bật các tính năng lõi cho Docker trên Android 16
-          scripts/config --file $CONF -e NAMESPACES
-          scripts/config --file $CONF -e NET_NS
-          scripts/config --file $CONF -e PID_NS
-          scripts/config --file $CONF -e IPC_NS
-          scripts/config --file $CONF -e CGROUPS
-          scripts/config --file $CONF -e CGROUP_DEVICE
-          scripts/config --file $CONF -e OVERLAY_FS
-          scripts/config --file $CONF -e VETH
-          scripts/config --file $CONF -e BRIDGE
-          scripts/config --file $CONF -e USER_NS
-          # Android 16 yêu cầu nén kernel bằng LZ4 hoặc ZSTD để boot nhanh
-          scripts/config --file $CONF -e KERNEL_LZ4
-
-      - name: Build Kernel
+      - name: Build
         uses: dabao1955/kernel_build_action@main
         with:
           kernel-url: https://github.com/LineageOS/android_kernel_samsung_a71
           kernel-branch: lineage-23.2
           config: a71_defconfig
           arch: arm64
-          aosp-gcc: true
+          # PHẦN QUAN TRỌNG CHO DOCKER
+          lxc: true
+          lxc-patch: true
+          
+          # PHẦN FIX LỖI TOOLCHAIN CHO ANDROID 16
+          aosp-gcc: false # Tắt GCC để tránh lỗi 128 (vì Android 16 dùng Clang thuần)
           aosp-clang: true
-          android-version: 16 # Khai báo Android 16
-          aosp-clang-version: r530567 # Bản Clang cho Android 16
+          android-version: 16
+          aosp-clang-version: r530567 # Bản Clang mới nhất cho Android 16
+          
+          # ĐÓNG GÓI & PHÁT HÀNH
           anykernel3: true
           release: true
           access-token: ${{ secrets.GITHUB_TOKEN }}
