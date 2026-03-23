@@ -18,25 +18,22 @@ jobs:
           config: a71_defconfig
           arch: arm64
           
-          # 1. TẮT LXC TỰ ĐỘNG ĐỂ TRÁNH LỖI BIÊN DỊCH (Hỏng cấu trúc SCHED)
-          # Chúng ta sẽ tìm cách bật Docker thủ công sau khi build thành công bản gốc
+          # TẮT LXC TỰ ĐỘNG ĐỂ TRÁNH LỖI CẤU TRÚC MÃ NGUỒN (cstate error)
           lxc: false
           lxc-patch: false
           
-          # 2. SỬ DỤNG MIRROR CRDROID ĐỂ FIX LỖI 400
+          # SỬ DỤNG MIRROR CRDROID NHÁNH 14
           aosp-clang: false
           other-clang-url: https://gitlab.com/crdroidandroid/android_prebuilts_clang_host_linux-x86_clang-r530567.git
-          other-clang-branch: 15.0 # Nhánh chứa bản r530567 của crDroid
+          other-clang-branch: 14 # Đã sửa từ 15 thành 14
           
-          # 3. SETUP GCC MỒI (Dùng Android 12 để script không báo lỗi 128)
+          # SETUP GCC MỒI (Android 12)
           aosp-gcc: true
           android-version: 12
           
-          # 4. ĐÓNG GÓI & PHÁT HÀNH
           anykernel3: true
           release: true
           access-token: ${{ secrets.GITHUB_TOKEN }}
           
-          # 5. THAM SỐ ÉP BIÊN DỊCH & TẮT WARNING
-          # Thêm KCFLAGS=-w để bỏ qua các lỗi cú pháp nhỏ của Samsung code
+          # THAM SỐ ÉP BIÊN DỊCH
           extra-make-args: '["LLVM=1", "LLVM_IAS=1", "KCFLAGS=-w", "CC=clang", "LD=ld.lld"]'
