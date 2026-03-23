@@ -18,17 +18,21 @@ jobs:
           kernel-branch: lineage-23.2
           config: a71_defconfig
           arch: arm64
-          # PHẦN QUAN TRỌNG CHO DOCKER
+          
+          # DOCKER & LXC SUPPORT
           lxc: true
           lxc-patch: true
           
-          # PHẦN FIX LỖI TOOLCHAIN CHO ANDROID 16
-          aosp-gcc: false # Tắt GCC để tránh lỗi 128 (vì Android 16 dùng Clang thuần)
-          aosp-clang: true
-          android-version: 16
-          aosp-clang-version: r530567 # Bản Clang mới nhất cho Android 16
+          # TOOLCHAIN CONFIG (FIX LỖI GCC)
+          aosp-gcc: true
+          # Quan trọng: Ép lấy GCC bản 12 vì bản 16 không tồn tại trên server Google
+          gcc-branch: android12-release 
           
-          # ĐÓNG GÓI & PHÁT HÀNH
+          aosp-clang: true
+          android-version: 12 # Đổi cái này thành 12 để script tải được cả Clang + GCC 12 ổn định
+          aosp-clang-version: r530567 # Nhưng vẫn ép dùng bản Clang mới nhất cho Android 16
+          
+          # PACKAGING
           anykernel3: true
           release: true
           access-token: ${{ secrets.GITHUB_TOKEN }}
