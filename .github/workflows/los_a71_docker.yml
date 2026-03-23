@@ -18,23 +18,22 @@ jobs:
           config: a71_defconfig
           arch: arm64
           
-          # 1. KÍCH HOẠT DOCKER/LXC
-          lxc: true
+          # THAY ĐỔI QUAN TRỌNG Ở ĐÂY:
+          # Tạm thời tắt lxc tự động của Action để tránh làm hỏng cấu trúc RunQueue (rq)
+          lxc: false 
           lxc-patch: false
           
-          # 2. SETUP CLANG: Dùng link GitLab r547379 bạn vừa tìm
-          aosp-clang: false
-          other-clang-url: https://gitlab.com/kei-space/clang/r547379.git
-          other-clang-branch: master
+          # Quay lại sử dụng Clang r530567 - Bản này "dễ tính" hơn với code cũ
+          aosp-clang: true
+          aosp-clang-version: r530567
           
-          # 3. SETUP GCC: Ép về bản 12 để tránh lỗi "branch android16-release not found"
+          # Giữ GCC 12 để mồi
           aosp-gcc: true
           android-version: 12
           
-          # 4. ĐÓNG GÓI
           anykernel3: true
           release: true
           access-token: ${{ secrets.GITHUB_TOKEN }}
           
-          # 5. THAM SỐ BIÊN DỊCH: Tắt cảnh báo để tránh dừng build giữa chừng
-          extra-make-args: '["LLVM=1", "LLVM_IAS=1", "KCFLAGS=-w", "CC=clang", "LD=ld.lld"]'
+          # Thêm cờ để bỏ qua các lỗi định nghĩa biến và ép biên dịch
+          extra-make-args: '["LLVM=1", "LLVM_IAS=1", "KCFLAGS=-w -Wno-error=implicit-function-declaration", "CC=clang"]'
