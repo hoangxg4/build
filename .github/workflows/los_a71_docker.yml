@@ -20,7 +20,7 @@ jobs:
           
           # 1. KÍCH HOẠT DOCKER/LXC
           lxc: true
-          lxc-patch: true
+          lxc-patch: false
           
           # 2. SETUP CLANG: Dùng link GitLab r547379 bạn vừa tìm
           aosp-clang: false
