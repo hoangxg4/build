@@ -25,7 +25,7 @@ jobs:
           # SỬ DỤNG MIRROR CRDROID NHÁNH 14
           aosp-clang: false
           other-clang-url: https://gitlab.com/crdroidandroid/android_prebuilts_clang_host_linux-x86_clang-r530567.git
-          other-clang-branch: 14 # Đã sửa từ 15 thành 14
+          other-clang-branch: 14.0 # Đã sửa từ 15 thành 14
           
           # SETUP GCC MỒI (Android 12)
           aosp-gcc: true
