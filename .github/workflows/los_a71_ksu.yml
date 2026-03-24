@@ -1,4 +1,4 @@
-name: Build Kernel A71 KSU - ReSukiSU
+name: Build Kernel A71 ReSukiSU
 
 on:
   workflow_dispatch:
@@ -27,44 +27,16 @@ jobs:
           path: kernel_source
           fetch-depth: 0
 
-      - name: Manual Patch KernelSU v0.9.5 (ReSukiSU Method)
+      - name: Setup ReSukiSU
         run: |
           cd kernel_source
           # Thiết lập danh tính Git
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           git config --global user.name "github-actions[bot]"
           
-          # Tải mã nguồn KernelSU v0.9.5
-          curl -LSs "https://raw.githubusercontent.com/tiann/KernelSU/main/kernel/setup.sh" | bash -s v0.9.5
+          # Tải mã nguồn ReSukiSU
+          curl -LSs "https://raw.githubusercontent.com/ReSukiSU/ReSukiSU/main/kernel/setup.sh" | bash
           rm -rf KernelSU/.git
-          
-          # ===== Theo hướng dẫn ReSukiSU: https://resukisu.github.io/guide/manual-integrate.html =====
-          
-          # 1. Patch fs/exec.c - execve hook (Required)
-          sed -i '/static int do_execveat_common/i #ifdef CONFIG_KSU_MANUAL_HOOK\n__attribute__((hot))\nextern int ksu_handle_execveat(int *fd, struct filename **filename_ptr,\n\t\t\t\tvoid *argv, void *envp, int *flags);\n#endif' fs/exec.c
-          sed -i '/int do_execve(struct filename \*filename/i #ifdef CONFIG_KSU_MANUAL_HOOK\n\tksu_handle_execveat((int *)AT_FDCWD, \&filename, \&argv, \&envp, 0);\n#endif' fs/exec.c
-          sed -i '/static int compat_do_execve/i #ifdef CONFIG_KSU_MANUAL_HOOK\n\tksu_handle_execveat((int *)AT_FDCWD, \&filename, \&argv, \&envp, 0);\n#endif' fs/exec.c
-          
-          # 2. Patch fs/open.c - faccessat hook (Required)
-          sed -i '/long do_faccessat/i #ifdef CONFIG_KSU_MANUAL_HOOK\n__attribute__((hot))\nextern int ksu_handle_faccessat(int *dfd, const char __user **filename_user,\n\t\t\t\tint *mode, int *flags);\n#endif' fs/open.c
-          sed -i '/SYSCALL_DEFINE3(faccessat/i #ifdef CONFIG_KSU_MANUAL_HOOK\n\tksu_handle_faccessat(\&dfd, \&filename, \&mode, NULL);\n#endif' fs/open.c
-          
-          # 3. Patch fs/stat.c - stat hooks (Required)
-          sed -i '/SYSCALL_DEFINE4(newfstatat/i #ifdef CONFIG_KSU_MANUAL_HOOK\n__attribute__((hot))\nextern int ksu_handle_stat(int *dfd, const char __user **filename_user,\n\t\t\t\tint *flags);\nextern void ksu_handle_newfstat_ret(unsigned int *fd, struct stat __user **statbuf_ptr);\n#endif\n\n' fs/stat.c
-          sed -i '/int error = vfs_fstatat/i #ifdef CONFIG_KSU_MANUAL_HOOK\n\tksu_handle_stat(\&dfd, \&filename, \&flag);\n#endif' fs/stat.c
-          sed -i '/int error = vfs_fstat(i #ifdef CONFIG_KSU_MANUAL_HOOK\n\tksu_handle_newfstat_ret(\&fd, \&statbuf);\n#endif' fs/stat.c
-          
-          # 4. Patch kernel/reboot.c - sys_reboot hook (Required)
-          sed -i '/SYSCALL_DEFINE4(reboot/i #ifdef CONFIG_KSU_MANUAL_HOOK\nextern int ksu_handle_sys_reboot(int magic1, int magic2, unsigned int cmd, void __user **arg);\n#endif\n' kernel/reboot.c
-          sed -i '/char buffer\[256\];/i #ifdef CONFIG_KSU_MANUAL_HOOK\n\tksu_handle_sys_reboot(magic1, magic2, cmd, \&arg);\n#endif' kernel/reboot.c
-          
-          # 5. Patch kernel/sys.c - setuid hooks (Required for some kernels)
-          sed -i '/long __sys_setresuid/i #ifdef CONFIG_KSU_MANUAL_HOOK\nextern int ksu_handle_setresuid(uid_t ruid, uid_t euid, uid_t suid);\n#endif\n' kernel/sys.c
-          sed -i '/kuid_t kruid, keuid, ksuid;/i #ifdef CONFIG_KSU_MANUAL_HOOK\n\t(void)ksu_handle_setresuid(ruid, euid, suid);\n#endif' kernel/sys.c
-          
-          # 6. Patch fs/read_write.c - sys_read hook (Required for some kernels)
-          sed -i '/SYSCALL_DEFINE3(read/i #ifdef CONFIG_KSU_MANUAL_HOOK\nextern bool ksu_init_rc_hook __read_mostly;\nextern __attribute__((cold)) int ksu_handle_sys_read(unsigned int fd,\n\t\t\t\tchar __user **buf_ptr, size_t *count_ptr);\n#endif\n' fs/read_write.c
-          sed -i '/struct fd f = fdget_pos/i #ifdef CONFIG_KSU_MANUAL_HOOK\n\tif (unlikely(ksu_init_rc_hook))\n\t\tksu_handle_sys_read(fd, \&buf, \&count);\n#endif' fs/read_write.c
           
           # Bật CONFIG_KSU, CONFIG_KSU_MANUAL_HOOK và tắt KPROBES
           echo "CONFIG_KSU=y" >> arch/arm64/configs/a71_defconfig
@@ -73,7 +45,7 @@ jobs:
           
           # Commit và ép tên nhánh là master
           git add .
-          git commit -m "Manual KSU Patch v0.9.5 (ReSukiSU Method)"
+          git commit -m "Add ReSukiSU"
           git branch -m master
 
       - name: Build Kernel
@@ -100,11 +72,11 @@ jobs:
         uses: softprops/action-gh-release@v1
         with:
           tag_name: los_a71_ksu
-          name: Kernel A71 KSU (los_a71_ksu)
+          name: Kernel A71 ReSukiSU (los_a71_ksu)
           body: |
-            Build Kernel Samsung A71 với KernelSU
+            Build Kernel Samsung A71 với ReSukiSU
             - Kernel Source: LineageOS/android_kernel_samsung_a71 (lineage-23.2)
-            - KernelSU Integration: Theo hướng dẫn ReSukiSU
+            - Root Solution: ReSukiSU
             - Trang web: https://resukisu.github.io/
           files: |
             ${{ github.workspace }}/out/boot.img
