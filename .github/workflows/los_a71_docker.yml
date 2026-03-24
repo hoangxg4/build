@@ -10,13 +10,7 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout Kernel Source
-        uses: actions/checkout@v4
-        with:
-          repository: LineageOS/android_kernel_samsung_a71
-          ref: lineage-23.2
-          path: kernel
-
+      # BƯỚC 1: SETUP CLANG TRƯỚC (Vì bước này không dính dáng đến thư mục kernel)
       - name: Setup Clang r547379
         run: |
           mkdir -p ${{ github.workspace }}/my-clang
@@ -26,51 +20,27 @@ jobs:
           git init && git config user.email "bot@action.com" && git config user.name "Builder"
           git add . && git commit -m "init" && git branch -m master
 
-      - name: Inject Docker Config to Defconfig
-        run: |
-          # Đường dẫn đến file config của A71
-          DEFCONFIG="kernel/arch/arm64/configs/a71_defconfig"
-          
-          # Chèn các dòng cấu hình Docker vào cuối file
-          echo "" >> $DEFCONFIG
-          echo "# Docker & LXC Support" >> $DEFCONFIG
-          echo "CONFIG_LXC=y" >> $DEFCONFIG
-          echo "CONFIG_CGROUP_DEVICE=y" >> $DEFCONFIG
-          echo "CONFIG_CPUSETS=y" >> $DEFCONFIG
-          echo "CONFIG_CGROUP_CPUACCT=y" >> $DEFCONFIG
-          echo "CONFIG_MEMCG=y" >> $DEFCONFIG
-          echo "CONFIG_MEMCG_SWAP=y" >> $DEFCONFIG
-          echo "CONFIG_OVERLAY_FS=y" >> $DEFCONFIG
-          echo "CONFIG_VETH=y" >> $DEFCONFIG
-          echo "CONFIG_BRIDGE=y" >> $DEFCONFIG
-          echo "CONFIG_NETFILTER_XT_MATCH_IPVS=y" >> $DEFCONFIG
-          echo "CONFIG_IP_VS=y" >> $DEFCONFIG
-          echo "CONFIG_NET_L3_MASTER_DEV=y" >> $DEFCONFIG
-          echo "CONFIG_IPVLAN=y" >> $DEFCONFIG
-          echo "CONFIG_MACVLAN=y" >> $DEFCONFIG
-          echo "CONFIG_VXLAN=y" >> $DEFCONFIG
-          
-          echo "✓ Đã chèn cấu hình Docker vào $DEFCONFIG thành công!"
-
+      # BƯỚC 2: BUILD KERNEL (Bỏ qua actions/checkout để tránh trùng lặp)
       - name: Build Kernel
         uses: dabao1955/kernel_build_action@main
         with:
-          # Vẫn dùng repo gốc của LineageOS
           kernel-url: https://github.com/LineageOS/android_kernel_samsung_a71
           kernel-branch: lineage-23.2
           config: a71_defconfig
           arch: arm64
           
-          # TẮT LXC TỰ ĐỘNG CỦA SCRIPT (Để tránh lỗi cstate)
+          # Tắt lxc tự động để tránh lỗi cstate/WALT của Samsung
           lxc: false
           lxc-patch: false
           
-          # Dùng Clang r547379 tự tạo
+          # Chèn cấu hình Docker trực tiếp thông qua extra-make-args hoặc biến môi trường
+          # Nhưng cách tốt nhất là dùng lệnh sed ở bước trước nếu bạn muốn can thiệp config.
+          # Tuy nhiên, hãy thử build thành công bản gốc với Clang mới này trước nhé.
+          
           aosp-clang: false
           other-clang-url: ${{ github.workspace }}/my-clang
           other-clang-branch: master
           
-          # GCC mồi
           aosp-gcc: true
           android-version: 12
           
@@ -78,5 +48,4 @@ jobs:
           release: true
           access-token: ${{ secrets.GITHUB_TOKEN }}
           
-          # Tham số ép biên dịch
           extra-make-args: '["LLVM=1", "LLVM_IAS=1", "KCFLAGS=-w", "CC=clang", "LD=ld.lld"]'
