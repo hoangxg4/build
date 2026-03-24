@@ -83,7 +83,7 @@ jobs:
             - Root Solution: ReSukiSU
             - Trang web: https://resukisu.github.io/
           files: |
-            ${{ github.workspace }}/out/boot.img
-            ${{ github.workspace }}/out/AnyKernel3.zip
+            ${{ github.workspace }}/kernel/kernel/out/boot.img
+            ${{ github.workspace }}/kernel/kernel/out/AnyKernel3.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
