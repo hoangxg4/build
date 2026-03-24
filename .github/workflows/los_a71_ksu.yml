@@ -19,7 +19,7 @@ jobs:
           git init && git config user.email "bot@action.com" && git config user.name "Builder"
           git add . && git commit -m "init" && git branch -m master
 
-      - name: Build Kernel with KernelSU Manual
+      - name: Build Kernel with KSU
         uses: dabao1955/kernel_build_action@main
         with:
           kernel-url: https://github.com/LineageOS/android_kernel_samsung_a71
@@ -27,20 +27,20 @@ jobs:
           config: a71_defconfig
           arch: arm64
           
-          # TÍCH HỢP KERNELSU PHIÊN BẢN V3.10.0
-          kernelsu: true
-          kernelsu-version: v3.10.0
+          # ĐỔI THÀNH 'ksu' THEO ĐÚNG ĐỊNH NGHĨA CỦA ACTION
+          ksu: true
+          ksu-version: v3.10.0
           
-          # KHÔNG DÙNG LXC ĐỂ ĐẢM BẢO ỔN ĐỊNH CHO KSU
+          # Tắt LXC để tránh lỗi biên dịch cstate trên Samsung
           lxc: false
           lxc-patch: false
           
-          # TRỎ VÀO CLANG TỰ TẠO
+          # Clang r547379 tự tạo
           aosp-clang: false
           other-clang-url: ${{ github.workspace }}/my-clang
           other-clang-branch: master
           
-          # GCC MỒI (ANDROID 12)
+          # GCC mồi (Android 12)
           aosp-gcc: true
           android-version: 12
           
@@ -48,5 +48,5 @@ jobs:
           release: true
           access-token: ${{ secrets.GITHUB_TOKEN }}
           
-          # THAM SỐ BIÊN DỊCH
+          # Tham số ép biên dịch và tắt warning
           extra-make-args: '["LLVM=1", "LLVM_IAS=1", "KCFLAGS=-w", "CC=clang", "LD=ld.lld"]'
