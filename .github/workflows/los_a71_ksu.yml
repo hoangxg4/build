@@ -26,17 +26,21 @@ jobs:
           ref: lineage-23.2
           path: kernel_source
           fetch-depth: 0
+          submodules: true
 
-      - name: Setup ReSukiSU
+      - name: Setup ReSukiSU as Git Submodule
         run: |
           cd kernel_source
           # Thiết lập danh tính Git
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           git config --global user.name "github-actions[bot]"
           
-          # Tải mã nguồn ReSukiSU
-          curl -LSs "https://raw.githubusercontent.com/ReSukiSU/ReSukiSU/main/kernel/setup.sh" | bash
-          rm -rf KernelSU/.git
+          # Clone ReSukiSU vào thư mục kernel/ReSukiSU
+          git clone https://github.com/ReSukiSU/ReSukiSU.git kernel/ReSukiSU
+          
+          # Tạo symlink drivers/kernelsu -> ReSukiSU/kernel
+          mkdir -p drivers/kernelsu
+          cp -r kernel/ReSukiSU/kernel/* drivers/kernelsu/
           
           # Bật CONFIG_KSU, CONFIG_KSU_MANUAL_HOOK và tắt KPROBES
           echo "CONFIG_KSU=y" >> arch/arm64/configs/a71_defconfig
