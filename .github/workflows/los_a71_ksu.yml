@@ -21,16 +21,23 @@ jobs:
         with:
           repository: LineageOS/android_kernel_samsung_a71
           ref: lineage-23.2
-          path: kernel_source  # Đổi tên thư mục để không trùng với 'kernel' của action
+          path: kernel_source
 
       - name: Manual Patch KernelSU v0.9.5
         run: |
           cd kernel_source
+          
+          # THIẾT LẬP DANH TÍNH GIT (Sửa lỗi exit code 128)
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git config --global user.name "github-actions[bot]"
+          
           # Tải mã nguồn KernelSU v0.9.5
           curl -LSs "https://raw.githubusercontent.com/tiann/KernelSU/main/kernel/setup.sh" | bash -s v0.9.5
           
-          # Patch các file hệ thống (Theo tài liệu hướng dẫn cho Non-GKI)
-          # Patch fs/exec.c
+          # XÓA THƯ MỤC .GIT CỦA KERNELSU (Sửa lỗi embedded repo)
+          rm -rf KernelSU/.git
+          
+          # Patch các file hệ thống (Manual Patch cho Non-GKI)
           sed -i '/static int do_execveat_common/i #ifdef CONFIG_KSU\nextern bool ksu_execveat_hook __read_mostly;\nextern int ksu_handle_execveat(int *fd, struct filename **filename_ptr, void *argv, void *envp, int *flags);\nextern int ksu_handle_execveat_sucompat(int *fd, struct filename **filename_ptr, void *argv, void *envp, int *flags);\n#endif' fs/exec.c
           sed -i '/return __do_execve_file/i #ifdef CONFIG_KSU\n\tif (unlikely(ksu_execveat_hook))\n\t\tksu_handle_execveat(&fd, &filename, &argv, &envp, &flags);\n\telse\n\t\tksu_handle_execveat_sucompat(&fd, &filename, &argv, &envp, &flags);\n#endif' fs/exec.c
 
@@ -38,31 +45,25 @@ jobs:
           echo "CONFIG_KSU=y" >> arch/arm64/configs/a71_defconfig
           sed -i 's/CONFIG_KPROBES=y/CONFIG_KPROBES=n/g' arch/arm64/configs/a71_defconfig
           
-          # Biến thư mục này thành repo cục bộ để Action sử dụng
-          git add . && git commit -m "Manual KSU Patch"
+          # Commit thay đổi
+          git add .
+          git commit -m "Manual KSU Patch v0.9.5"
 
       - name: Build Kernel
         uses: dabao1955/kernel_build_action@main
         with:
-          # Trỏ trực tiếp vào thư mục đã patch trên máy ảo
           kernel-url: ${{ github.workspace }}/kernel_source
           kernel-branch: main
           config: a71_defconfig
           arch: arm64
-          
-          # TẮT TOÀN BỘ CƠ CHẾ TỰ ĐỘNG (Vì ta đã tự làm ở trên)
           ksu: false
           lxc: false
-          
           aosp-clang: false
           other-clang-url: ${{ github.workspace }}/my-clang
           other-clang-branch: master
-          
           aosp-gcc: true
           android-version: 12
-          
           anykernel3: true
           release: true
           access-token: ${{ secrets.GITHUB_TOKEN }}
-          
           extra-make-args: '["LLVM=1", "LLVM_IAS=1", "KCFLAGS=-w", "CC=clang", "LD=ld.lld"]'
