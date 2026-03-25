@@ -16,54 +16,56 @@ jobs:
           Invoke-WebRequest -Uri $url -OutFile $installer
         shell: powershell
 
-      - name: 2. Silent Install (Chromium Engine)
+      - name: 2 & 3. Silent Install & Active Polling
         run: |
-          Write-Host "Bắt đầu cài đặt (Chromium Engine)..."
-          
-          # Flags chuyên dụng cho Chromium mini_installer
+          Write-Host "Bắt đầu gọi Web Installer..."
           $args = @("--system-level", "--silent", "--do-not-launch-chrome")
-          $process = Start-Process -FilePath ".\SamsungSetup.exe" -ArgumentList $args -Wait -PassThru -NoNewWindow
-          
-          Write-Host "Tiến trình cài đặt khởi tạo kết thúc với Exit Code: $($process.ExitCode)"
-          
-          # Đợi 30s để tiến trình con (setup.exe) hoàn tất việc bung file và ghi Registry
-          Write-Host "Chờ 30 giây để I/O disk hoàn tất..."
-          Start-Sleep -Seconds 30
-        shell: powershell
+          Start-Process -FilePath ".\SamsungSetup.exe" -ArgumentList $args -NoNewWindow
 
-      - name: 3. Verify Directory & Compress
-        run: |
-          # Kiểm tra cả 2 phân vùng cài đặt (System và User)
           $targetDirSystem = "C:\Program Files\Samsung\Internet\Application"
           $targetDirUser = "$env:LOCALAPPDATA\Samsung\Internet\Application"
-          $zipName = "SamsungInternet_Offline.zip"
-          
           $finalDir = ""
           
-          if (Test-Path $targetDirSystem) {
-              $finalDir = $targetDirSystem
-              Write-Host "Phát hiện cài đặt System-level tại: $finalDir"
-          } elseif (Test-Path $targetDirUser) {
-              $finalDir = $targetDirUser
-              Write-Host "Phát hiện cài đặt User-level tại: $finalDir"
+          $timeoutSeconds = 300 # Giới hạn tối đa 5 phút để tải & cài đặt
+          $interval = 5
+          $elapsed = 0
+          $isInstalled = $false
+
+          Write-Host "Đang chờ tải payload từ server và bung nén (Timeout: 5 phút)..."
+
+          while ($elapsed -lt $timeoutSeconds) {
+              # Quét tìm thư mục đích
+              if (Test-Path $targetDirSystem) { $finalDir = $targetDirSystem }
+              elseif (Test-Path $targetDirUser) { $finalDir = $targetDirUser }
+
+              if ($finalDir -ne "") {
+                  # Kiểm tra xem file chạy lõi đã được bung ra chưa
+                  $exes = Get-ChildItem -Path $finalDir -Filter "*.exe" -ErrorAction SilentlyContinue
+                  if ($exes.Count -gt 0) {
+                      Write-Host "Đã tải xong! Phát hiện file lõi: $($exes[0].Name) tại $finalDir"
+                      $isInstalled = $true
+                      
+                      # Nghỉ thêm 15s để Installer dọn dẹp file temp và OS nhả lock (File Handles)
+                      Write-Host "Chờ 15s để I/O Disk đồng bộ..."
+                      Start-Sleep -Seconds 15
+                      break
+                  }
+              }
+
+              Start-Sleep -Seconds $interval
+              $elapsed += $interval
+              Write-Host "Đã chờ $elapsed giây..."
           }
 
-          if ($finalDir -ne "") {
-              Write-Host "Đang nén thư mục..."
-              Compress-Archive -Path "$finalDir\*" -DestinationPath $zipName -Force
-              Write-Host "Nén thành công file: $zipName"
-          } else {
-              Write-Error "Lỗi: Không tìm thấy thư mục cài đặt ở cả System và User level."
-              
-              # Debug info
-              Write-Host "--- Thử tìm thư mục Samsung ở Program Files ---"
-              Get-ChildItem -Path "C:\Program Files\Samsung" -Recurse -ErrorAction SilentlyContinue | Select-Object FullName
-              
-              Write-Host "--- Thử tìm thư mục Samsung ở LocalAppData ---"
-              Get-ChildItem -Path "$env:LOCALAPPDATA\Samsung" -Recurse -ErrorAction SilentlyContinue | Select-Object FullName
-              
+          if (-not $isInstalled) {
+              Write-Error "Timeout! Quá trình tải/cài đặt vượt quá 5 phút hoặc mạng của Runner bị lỗi."
               exit 1
           }
+
+          $zipName = "SamsungInternet_Offline.zip"
+          Write-Host "Bắt đầu nén thư mục offline..."
+          Compress-Archive -Path "$finalDir\*" -DestinationPath $zipName -Force
+          Write-Host "Nén thành công file: $zipName"
         shell: powershell
 
       - name: 4. Upload Offline Installer Artifact
