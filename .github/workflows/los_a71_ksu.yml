@@ -7,7 +7,8 @@ permissions:
   contents: write
 
 jobs:
-  build:
+  build-kernel:
+    name: Build Kernel
     runs-on: ubuntu-latest
     steps:
       - name: Setup Clang r547379
@@ -31,25 +32,25 @@ jobs:
       - name: Setup ReSukiSU as Git Submodule
         run: |
           cd kernel_source
-          # Thiết lập danh tính Git
+          # Thiết lập danh tính Git để commit
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           git config --global user.name "github-actions[bot]"
           
           # Clone ReSukiSU vào thư mục kernel/ReSukiSU
           git clone https://github.com/ReSukiSU/ReSukiSU.git kernel/ReSukiSU
           
-          # Tạo symlink drivers/kernelsu -> ReSukiSU/kernel
+          # Tạo symlink theo yêu cầu của docs (drivers/kernelsu -> ReSukiSU/kernel)
           mkdir -p drivers/kernelsu
           cp -r kernel/ReSukiSU/kernel/* drivers/kernelsu/
           
-          # Bật CONFIG_KSU, CONFIG_KSU_MANUAL_HOOK và tắt KPROBES
+          # Cấu hình defconfig: Bật KSU, Bật MANUAL_HOOK, Tắt KPROBES
           echo "CONFIG_KSU=y" >> arch/arm64/configs/a71_defconfig
           echo "CONFIG_KSU_MANUAL_HOOK=y" >> arch/arm64/configs/a71_defconfig
           sed -i 's/CONFIG_KPROBES=y/CONFIG_KPROBES=n/g' arch/arm64/configs/a71_defconfig
           
-          # Commit và ép tên nhánh là master
+          # Commit thay đổi và đổi tên nhánh thành master để action nhận diện
           git add .
-          git commit -m "Add ReSukiSU"
+          git commit -m "Add ReSukiSU configs & hooks"
           git branch -m master
 
       - name: Build Kernel
@@ -59,14 +60,15 @@ jobs:
           kernel-branch: master
           config: a71_defconfig
           arch: arm64
-          ksu: false
+          ksu: false # Đặt false vì ta đã setup thủ công bằng script ở trên
           lxc: false
           aosp-clang: false
           other-clang-url: ${{ github.workspace }}/my-clang
           other-clang-branch: master
           aosp-gcc: true
           android-version: 12
-          anykernel3: false # TẮT TÍNH NĂNG TỰ ĐỘNG LỖI
+          anykernel3: true # BẬT ĐỂ LÁCH LỖI "bootimg-url is required" CỦA ACTION
+          anykernel3-url: https://github.com/osm0sis/AnyKernel3
           release: false
           access-token: ${{ secrets.GITHUB_TOKEN }}
           extra-make-args: '["LLVM=1", "LLVM_IAS=1", "KCFLAGS=-w", "CC=clang", "LD=ld.lld"]'
@@ -74,16 +76,16 @@ jobs:
       - name: Package AnyKernel3 Manually
         run: |
           echo "=== 1. Clone AnyKernel3 chuẩn ==="
-          git clone https://github.com/osm0sis/AnyKernel3.git AK3
-          cd AK3
-          rm -rf .git # Xóa thư mục git ẩn để giảm dung lượng file zip
+          git clone https://github.com/osm0sis/AnyKernel3.git AK3_Manual
+          cd AK3_Manual
+          rm -rf .git
           
-          echo "=== 2. Lấy Kernel Image ==="
-          # Tìm file Image.gz-dtb (hoặc Image.gz, Image) trong thư mục build out
-          KERNEL_IMAGE=$(find ${{ github.workspace }}/kernel_source -type f \( -name "Image.gz-dtb" -o -name "Image.gz" -o -name "Image" \) | grep "arch/arm64/boot" | head -n 1)
+          echo "=== 2. Lấy Kernel Image từ workspace ==="
+          # Tìm file Image vừa build xong (loại trừ thư mục AK3_Manual để không copy trùng)
+          KERNEL_IMAGE=$(find ${{ github.workspace }} -type f \( -name "Image.gz-dtb" -o -name "Image.gz" -o -name "Image" \) | grep -v "AK3_Manual" | head -n 1)
           
           if [ -z "$KERNEL_IMAGE" ]; then
-            echo "❌ Fatal: Không tìm thấy Kernel Image sau khi compile!"
+            echo "❌ Fatal: Không tìm thấy Kernel Image!"
             exit 1
           fi
           
@@ -91,19 +93,18 @@ jobs:
           cp "$KERNEL_IMAGE" ./
           
           echo "=== 3. Cấu hình nhanh anykernel.sh ==="
-          # Thay đổi device names cơ bản thành a71
+          # Đổi tên device để TWRP không báo lỗi sai thiết bị
           sed -i 's/device.name1=maguro/device.name1=a71/g' anykernel.sh
           sed -i 's/device.name2=toro/device.name2=a715f/g' anykernel.sh
           sed -i 's/device.name3=toroplus/device.name3=a715/g' anykernel.sh
           
           echo "=== 4. Đóng gói Zip chuẩn ==="
-          # Nén tất cả các file trong thư mục AK3 hiện tại
           zip -r9 ${{ github.workspace }}/AnyKernel3_A71_ReSukiSU.zip *
           
           echo "=== 5. Kiểm tra cấu trúc file zip ==="
           unzip -l ${{ github.workspace }}/AnyKernel3_A71_ReSukiSU.zip
 
-      - name: Upload Release los_a71_ksu
+      - name: Upload Release
         uses: softprops/action-gh-release@v1
         with:
           tag_name: los_a71_ksu
@@ -112,7 +113,8 @@ jobs:
             Build Kernel Samsung A71 với ReSukiSU
             - Kernel Source: LineageOS/android_kernel_samsung_a71 (lineage-23.2)
             - Root Solution: ReSukiSU
-            - Trang web: https://resukisu.github.io/
+            - Đóng gói: AnyKernel3 (Cấu trúc chuẩn, có META-INF)
+            - Cảnh báo: Cần check lại đường dẫn phân vùng boot trong anykernel.sh trước khi flash!
           files: ${{ github.workspace }}/AnyKernel3_A71_ReSukiSU.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
