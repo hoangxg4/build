@@ -15,63 +15,80 @@ jobs:
           Invoke-WebRequest -Uri $url -OutFile "SamsungSetup.exe"
         shell: powershell
 
-      - name: 2 & 3. Install (C-Drive & RunAs) & Active Polling
+      - name: 2 & 3. API Intercept & Download CRX (Bypass CUP2)
         run: |
-          Write-Host "Moving installer to C: drive to bypass Omaha drive bugs..."
-          $workDir = "C:\SamsungTemp"
-          New-Item -ItemType Directory -Force -Path $workDir | Out-Null
-          Move-Item -Path ".\SamsungSetup.exe" -Destination "$workDir\SamsungSetup.exe" -Force
-          Set-Location -Path $workDir
+          Write-Host "Bypass CUP2 Key: Gửi Request JSON thuần lên Server..."
           
-          Write-Host "Pre-creating Registry keys to prevent Omaha crash..."
-          New-Item -Path "HKLM:\SOFTWARE\Samsung\Update" -Force -ErrorAction SilentlyContinue | Out-Null
-          New-Item -Path "HKLM:\SOFTWARE\Google\Update" -Force -ErrorAction SilentlyContinue | Out-Null
+          # Đã xóa bỏ hoàn toàn ?cup2key=... và ?cup2hreq=...
+          $url = "https://update.internet.apps.samsung.com/service/update2/json"
           
-          Write-Host "Starting Web Installer with forced High-IL (RunAs)..."
-          # Đổi tên biến $args thành $installArgs để tránh xung đột biến hệ thống
-          $installArgs = @("--system-level", "--silent", "--do-not-launch-chrome")
-          
-          # Đã xóa -NoNewWindow, chỉ giữ lại -Verb RunAs
-          Start-Process -FilePath ".\SamsungSetup.exe" -ArgumentList $installArgs -Verb RunAs
-          
-          $targetDir = "C:\Program Files\Samsung\Internet\Application"
-          $finalDir = ""
-          
-          $timeoutSeconds = 300
-          $interval = 5
-          $elapsed = 0
-          $isInstalled = $false
-          
-          Write-Host "Waiting for payload at $targetDir (Timeout: 5 mins)..."
-          
-          while ($elapsed -lt $timeoutSeconds) {
-              if (Test-Path $targetDir) {
-                  $finalDir = $targetDir
-                  $exes = Get-ChildItem -Path $finalDir -Filter "*.exe" -ErrorAction SilentlyContinue
-                  
-                  if ($exes.Count -gt 0) {
-                      Write-Host "Download complete! Found core executable at $finalDir"
-                      $isInstalled = $true
-                      Write-Host "Waiting 20s for file handles to release..."
-                      Start-Sleep -Seconds 20
-                      break
-                  }
-              }
-              
-              Start-Sleep -Seconds $interval
-              $elapsed += $interval
-              Write-Host "Waited $elapsed seconds..."
+          $headers = @{
+              "Content-Type" = "application/json"
+              "User-Agent" = "SamsungInternetUpdater 143.0.0.8"
           }
           
-          if (-not $isInstalled) {
-              Write-Error "Timeout! Installation exceeded 5 minutes or installer crashed."
+          $payload = @{
+              request = @{
+                  protocol = "3.0"
+                  os = @{ platform = "win"; version = "10.0"; arch = "x64" }
+                  app = @(
+                      @{
+                          appid = "ohpjbciplfdockeiligelcjnkiejldpn"
+                          version = "0.0.0.0"
+                          updatecheck = @{}
+                      }
+                  )
+              }
+          } | ConvertTo-Json -Depth 10 -Compress
+          
+          Write-Host "Đang gọi API Omaha..."
+          $response = Invoke-WebRequest -Uri $url -Method Post -Headers $headers -Body $payload -UseBasicParsing
+          $rawText = $response.Content
+          
+          # Cắt bỏ JSON Hijacking Protection ()]}')
+          if ($rawText.StartsWith(")]}'")) {
+              $rawText = $rawText.Substring(4).Trim()
+          }
+          
+          $data = $rawText | ConvertFrom-Json
+          
+          # Xử lý linh hoạt 2 cấu trúc JSON thường gặp của Omaha
+          $appData = if ($data.response.apps) { $data.response.apps[0] } else { $data.response.app[0] }
+          $updateCheck = $appData.updatecheck
+          
+          if ($updateCheck.status -eq "ok") {
+              $version = $updateCheck.manifest.version
+              if (-not $version) { $version = "Latest" }
+              
+              # Lấy URL tải file
+              $baseUrl = $updateCheck.urls.url[0].codebase
+              $filename = $updateCheck.manifest.packages.package[0].name
+              $dlUrl = "$baseUrl$filename"
+              
+              Write-Host "=================================================="
+              Write-Host "✅ JACKPOT!!! Tìm thấy bản v$version"
+              Write-Host "✅ Tải từ: $dlUrl"
+              Write-Host "=================================================="
+              
+              Write-Host "Đang tải file Payload (.crx)..."
+              $crxFile = "SamsungInternet.crx"
+              Invoke-WebRequest -Uri $dlUrl -OutFile $crxFile
+              
+              Write-Host "Trích xuất file CRX..."
+              # CRX thực chất là chuẩn nén ZIP, đổi tên và giải nén
+              $zipFile = "SamsungInternet.zip"
+              Rename-Item -Path $crxFile -NewName $zipFile
+              
+              $extractDir = "SamsungOffline"
+              Expand-Archive -Path $zipFile -DestinationPath $extractDir -Force
+              
+              Write-Host "Đóng gói Artifact..."
+              Compress-Archive -Path "$extractDir\*" -DestinationPath "SamsungInternet_Offline.zip" -Force
+              Write-Host "Thành công tuyệt đối!"
+          } else {
+              Write-Error "❌ Server từ chối. Status: $($updateCheck.status)"
               exit 1
           }
-          
-          $workspaceZip = "$env:GITHUB_WORKSPACE\SamsungInternet_Offline.zip"
-          Write-Host "Compressing offline folder to workspace..."
-          Compress-Archive -Path "$finalDir\*" -DestinationPath $workspaceZip -Force
-          Write-Host "Compression successful!"
         shell: powershell
 
       - name: 4. Upload Offline Installer Artifact
