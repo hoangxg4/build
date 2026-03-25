@@ -1,0 +1,54 @@
+name: Build Samsung Internet Offline Installer
+
+on:
+  workflow_dispatch: # Cho phép trigger thủ công từ giao diện GitHub Actions
+
+jobs:
+  build-and-pack:
+    runs-on: windows-latest
+    
+    steps:
+      - name: 1. Download Samsung Internet Installer
+        run: |
+          $url = "https://browser.samsung.com/media/x64_SamsungInternetSetup.exe"
+          $installer = "SamsungSetup.exe"
+          Write-Host "Đang tải $url..."
+          Invoke-WebRequest -Uri $url -OutFile $installer
+        shell: powershell
+
+      - name: 2. Silent Install
+        run: |
+          # Chạy cài đặt ngầm. Tuỳ thuộc vào công cụ build EXE (Inno Setup, NSIS, InstallShield),
+          # flag cài đặt ngầm thường là /S, /silent, /quiet, hoặc /qn.
+          Write-Host "Bắt đầu cài đặt..."
+          $process = Start-Process -FilePath ".\SamsungSetup.exe" -ArgumentList "/S", "/quiet" -Wait -PassThru -NoNewWindow
+          
+          if ($process.ExitCode -ne 0) {
+            Write-Warning "Exit code cài đặt không phải là 0 (Exit Code: $($process.ExitCode))."
+          }
+          
+          # Đợi thêm 15 giây để đảm bảo I/O disk hoàn tất việc bung file
+          Start-Sleep -Seconds 15
+        shell: powershell
+
+      - name: 3. Verify Directory & Compress
+        run: |
+          $targetDir = "C:\Program Files\Samsung\Internet\Application"
+          $zipName = "SamsungInternet_Offline.zip"
+          
+          if (Test-Path $targetDir) {
+              Write-Host "Tìm thấy thư mục: $targetDir"
+              Write-Host "Đang nén..."
+              Compress-Archive -Path "$targetDir\*" -DestinationPath $zipName -Force
+          } else {
+              Write-Error "Không tìm thấy thư mục $targetDir. Có thể cài đặt ngầm thất bại hoặc sai đường dẫn."
+              exit 1
+          }
+        shell: powershell
+
+      - name: 4. Upload Offline Installer Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: samsung-internet-offline-zip
+          path: SamsungInternet_Offline.zip
+          retention-days: 7 # Giữ file trên GitHub trong 7 ngày
