@@ -15,21 +15,11 @@ jobs:
           Invoke-WebRequest -Uri $url -OutFile "SamsungSetup.exe"
         shell: powershell
 
-      - name: 2 & 3. API Intercept via XML Endpoint (Bypass CUP2)
+      - name: 2 & 3. WAF Bypass via curl (Stealth Mode)
         run: |
-          Write-Host "Chuyển hướng chiến thuật: Tấn công Endpoint XML Legacy..."
+          Write-Host "Kích hoạt Plan F: Vượt tường lửa CloudFront bằng curl.exe..."
           
-          # Đổi URL: Xóa đuôi /json đi
-          $url = "https://update.internet.apps.samsung.com/service/update2"
-          
-          $headers = @{
-              "Content-Type" = "application/xml"
-              "User-Agent" = "SamsungInternetUpdater 143.0.0.8"
-              "X-Goog-Update-AppId" = "ohpjbciplfdockeiligelcjnkiejldpn"
-              "X-Goog-Update-Updater" = "updater-143.0.7499.194"
-          }
-          
-          # Dùng nguyên bản XML Request
+          # 1. Tạo file Payload XML
           $xmlRequest = @"
           <?xml version="1.0" encoding="UTF-8"?>
           <request protocol="3.0" updater="samsung-internet" ismachine="1">
@@ -40,13 +30,37 @@ jobs:
           </request>
           "@
           
-          Write-Host "Đang gửi gói tin XML..."
-          $response = Invoke-WebRequest -Uri $url -Method Post -Headers $headers -Body $xmlRequest -UseBasicParsing
+          $xmlRequest | Out-File -FilePath "payload.xml" -Encoding utf8 -NoNewline
           
-          # Ép kiểu phản hồi về định dạng XML của PowerShell để dễ bóc tách
-          [xml]$xmlData = $response.Content
+          # 2. Gọi curl.exe với bộ giáp Header hoàn chỉnh
+          $url = "https://update.internet.apps.samsung.com/service/update2"
           
-          # Trích xuất dữ liệu bằng XPath
+          Write-Host "Đang bắn payload qua tường lửa..."
+          & curl.exe -s -X POST $url `
+            -H "Content-Type: application/xml" `
+            -H "User-Agent: SamsungInternetUpdater 143.0.0.8" `
+            -H "X-Goog-Update-AppId: ohpjbciplfdockeiligelcjnkiejldpn" `
+            -H "X-Goog-Update-Updater: updater-143.0.7499.194" `
+            -H "X-Goog-Update-Interactivity: fg" `
+            -H "Accept: */*" `
+            -H "Cache-Control: no-cache" `
+            -d "@payload.xml" -o "response.xml"
+            
+          # 3. Phân tích kết quả trả về
+          if (-not (Test-Path "response.xml") -or (Get-Item "response.xml").Length -eq 0) {
+              Write-Error "❌ CloudFront vẫn chặn hoặc không có phản hồi."
+              exit 1
+          }
+          
+          [xml]$xmlData = Get-Content "response.xml"
+          
+          # Kiểm tra nếu response là mã HTML của trang báo lỗi (thay vì XML của Omaha)
+          if ($xmlData.html) {
+              Write-Error "❌ Đã bị WAF chặn! Response trả về trang HTML 403."
+              Get-Content "response.xml" | Select-Object -First 10
+              exit 1
+          }
+          
           $updateCheckStatus = $xmlData.SelectSingleNode("//updatecheck").status
           
           if ($updateCheckStatus -eq "ok") {
@@ -56,31 +70,29 @@ jobs:
               $dlUrl = "$baseUrl$filename"
               
               Write-Host "=================================================="
-              Write-Host "✅ JACKPOT!!! Phiên bản: $version"
-              Write-Host "✅ Link tải gốc: $dlUrl"
+              Write-Host "✅ JACKPOT!!! Vượt WAF thành công!"
+              Write-Host "✅ Tải bản v$version từ: $dlUrl"
               Write-Host "=================================================="
               
-              Write-Host "Đang tải file Payload ($filename)..."
-              Invoke-WebRequest -Uri $dlUrl -OutFile $filename
+              Write-Host "Đang kéo file qua curl..."
+              & curl.exe -s -L -o $filename $dlUrl
               
-              Write-Host "Giải mã và trích xuất file CRX bằng 7-Zip..."
+              Write-Host "Giải nén bằng 7-Zip..."
               $extractDir = "SamsungOffline"
               New-Item -ItemType Directory -Force -Path $extractDir | Out-Null
-              
-              # Sử dụng 7-Zip có sẵn của GitHub Actions để ép giải nén CRX bỏ qua Header bảo mật
               & "C:\Program Files\7-Zip\7z.exe" x $filename -o$extractDir -y
               
               if ($LASTEXITCODE -eq 0) {
-                  Write-Host "Đóng gói Artifact thành file ZIP hoàn chỉnh..."
+                  Write-Host "Đóng gói Artifact..."
                   Compress-Archive -Path "$extractDir\*" -DestinationPath "SamsungInternet_Offline.zip" -Force
-                  Write-Host "✅ Thành công tuyệt đối!"
+                  Write-Host "✅ Hoàn tất!"
               } else {
-                  Write-Error "❌ Lỗi khi giải nén file CRX."
+                  Write-Error "❌ Lỗi giải nén."
                   exit 1
               }
           } else {
-              Write-Error "❌ Server từ chối yêu cầu. XML Response:"
-              Write-Host $response.Content
+              Write-Error "❌ Server xử lý XML lỗi. Nội dung Response:"
+              Get-Content "response.xml"
               exit 1
           }
         shell: powershell
