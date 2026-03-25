@@ -5,6 +5,7 @@ on:
 
 permissions:
   contents: write
+  actions: write # BẮT BUỘC: Cấp quyền để workflow có thể xóa artifact
 
 jobs:
   build:
@@ -55,7 +56,6 @@ jobs:
       - name: Build Kernel
         uses: dabao1955/kernel_build_action@main
         with:
-          # Dùng file:// để Git hiểu đây là clone cục bộ (né lỗi warning/fatal)
           kernel-url: file://${{ github.workspace }}/kernel_source
           kernel-branch: master
           config: a71_defconfig
@@ -73,12 +73,20 @@ jobs:
           access-token: ${{ secrets.GITHUB_TOKEN }}
           extra-make-args: '["LLVM=1", "LLVM_IAS=1", "KCFLAGS=-w", "CC=clang", "LD=ld.lld"]'
 
-      - name: Debug - List output files
+      - name: Find and Prepare Release Zip
         run: |
-          echo "=== Kernel workspace ==="
-          ls -la ${{ github.workspace }}/
-          echo "=== Kernel out ==="
-          find ${{ github.workspace }}/build -name "*.img" -o -name "AnyKernel*.zip" 2>/dev/null || true
+          echo "=== Searching for AnyKernel3 zip ==="
+          # Tìm file zip động để tránh lỗi hardcode path
+          ZIP_FILE=$(find ${{ github.workspace }} -type f -name "*AnyKernel*.zip" | head -n 1)
+          
+          if [ -z "$ZIP_FILE" ]; then
+            echo "❌ Fatal: Không tìm thấy file AnyKernel3.zip nào trong workspace!"
+            exit 1
+          fi
+          
+          echo "✅ Đã tìm thấy: $ZIP_FILE"
+          # Đổi tên và copy ra root để dễ dàng upload
+          cp "$ZIP_FILE" ${{ github.workspace }}/AnyKernel3_A71_ReSukiSU.zip
 
       - name: Upload Release los_a71_ksu
         uses: softprops/action-gh-release@v1
@@ -90,7 +98,13 @@ jobs:
             - Kernel Source: LineageOS/android_kernel_samsung_a71 (lineage-23.2)
             - Root Solution: ReSukiSU
             - Trang web: https://resukisu.github.io/
-          files: |
-            ${{ github.workspace }}/build/kernel/kernel/out/AnyKernel3.zip
+          files: ${{ github.workspace }}/AnyKernel3_A71_ReSukiSU.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Cleanup Artifact (Anykernel3-flasher)
+        uses: geekyeggo/delete-artifact@v5
+        with:
+          name: Anykernel3-flasher* # Dùng wildcard đề phòng tool đổi tên version
+          useGlob: true
+          failOnError: false # Không làm fail toàn bộ workflow nếu artifact không tồn tại
