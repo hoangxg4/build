@@ -1,28 +1,29 @@
 name: Get Samsung Internet Offline Installer
 
 on:
-  # Cho phép kích hoạt thủ công (bấm nút Run workflow) trên giao diện GitHub
   workflow_dispatch: 
 
 jobs:
   download-and-extract:
-    # Bắt buộc dùng Windows vì chúng ta xài PowerShell, curl và đường dẫn 7-Zip mặc định
     runs-on: windows-latest
+    # Ép tất cả các step dùng PowerShell Core (pwsh) thay vì Windows PowerShell cũ
+    defaults:
+      run:
+        shell: pwsh
 
     steps:
-      - name: 1. Khởi động Chiến dịch
-        run: Write-Host "Bắt đầu tiến trình tự động tải và trích xuất Samsung Internet..."
-        shell: powershell
+      - name: 1. Khoi dong Chien dich
+        run: Write-Host "Bat dau tien trinh tu dong tai va trich xuat Samsung Internet..."
 
-      - name: 2 & 3. WAF Bypass via curl (Tàng hình & Bỏ qua CUP2)
+      - name: 2 & 3. WAF Bypass via curl (Bulletproof)
         run: |
-          Write-Host "Kích hoạt Plan F: Vượt tường lửa CloudFront bằng curl.exe..."
+          Write-Host "Kich hoat Plan F: Vuot tuong lua CloudFront bang curl.exe..."
           
-          # 1. Tạo file Payload XML (Viết trên 1 dòng để tránh lỗi Here-String của PowerShell)
+          # 1. Tao file Payload XML
           $xmlRequest = '<?xml version="1.0" encoding="UTF-8"?><request protocol="3.0" updater="samsung-internet" ismachine="1"><os platform="win" version="10.0" arch="x64"/><app appid="ohpjbciplfdockeiligelcjnkiejldpn" version="0.0.0.0" installsource="ondemand"><updatecheck/></app></request>'
-          $xmlRequest | Out-File -FilePath "payload.xml" -Encoding utf8 -NoNewline
+          Set-Content -Path "payload.xml" -Value $xmlRequest -Encoding utf8
           
-          # 2. Gọi curl.exe bằng mảng tham số (Tránh lỗi dấu backtick và lùi dòng)
+          # 2. Goi curl bang mang tham so
           $url = "https://update.internet.apps.samsung.com/service/update2"
           $curlArgs = @(
               "-s", "-X", "POST", $url,
@@ -37,19 +38,19 @@ jobs:
               "-o", "response.xml"
           )
           
-          Write-Host "Đang bắn payload qua tường lửa..."
+          Write-Host "Dang ban payload qua tuong lua..."
           & curl.exe $curlArgs
             
-          # 3. Phân tích kết quả
+          # 3. Phan tich ket qua
           if (-not (Test-Path "response.xml") -or (Get-Item "response.xml").Length -eq 0) {
-              Write-Error "❌ CloudFront vẫn chặn hoặc không có phản hồi."
+              Write-Error "[Loi] CloudFront van chan hoac khong co phan hoi."
               exit 1
           }
           
           [xml]$xmlData = Get-Content "response.xml"
           
           if ($xmlData.html) {
-              Write-Error "❌ Đã bị WAF chặn! Response trả về trang HTML 403."
+              Write-Error "[Loi] Da bi WAF chan! Response tra ve trang HTML 403."
               Get-Content "response.xml" | Select-Object -First 10
               exit 1
           }
@@ -63,37 +64,36 @@ jobs:
               $dlUrl = "$baseUrl$filename"
               
               Write-Host "=================================================="
-              Write-Host "✅ JACKPOT!!! Vượt WAF thành công!"
-              Write-Host "✅ Phiên bản: $version"
-              Write-Host "✅ Link: $dlUrl"
+              Write-Host "[THANG LOI] Vuot WAF thanh cong!"
+              Write-Host "Phien ban: $version"
+              Write-Host "Link tai: $dlUrl"
               Write-Host "=================================================="
               
-              Write-Host "Đang kéo file qua curl..."
+              Write-Host "Dang keo file qua curl..."
               & curl.exe -s -L -o $filename $dlUrl
               
-              Write-Host "Giải nén bằng 7-Zip..."
+              Write-Host "Giai nen bang 7-Zip..."
               $extractDir = "SamsungOffline"
               New-Item -ItemType Directory -Force -Path $extractDir | Out-Null
               & "C:\Program Files\7-Zip\7z.exe" x $filename -o$extractDir -y
               
               if ($LASTEXITCODE -eq 0) {
-                  Write-Host "Đóng gói Artifact..."
+                  Write-Host "Dong goi Artifact thanh file ZIP..."
                   Compress-Archive -Path "$extractDir\*" -DestinationPath "SamsungInternet_Offline.zip" -Force
-                  Write-Host "✅ Hoàn tất!"
+                  Write-Host "[HOAN TAT] Moi thu da san sang!"
               } else {
-                  Write-Error "❌ Lỗi giải nén."
+                  Write-Error "[Loi] Giai nen that bai."
                   exit 1
               }
           } else {
-              Write-Error "❌ Server xử lý XML lỗi. Nội dung Response:"
+              Write-Error "[Loi] Server tu choi request. Noi dung Response:"
               Get-Content "response.xml"
               exit 1
           }
-        shell: powershell
 
-      - name: 4. Xuất kho (Upload Artifact)
+      - name: 4. Xuat kho (Upload Artifact)
         uses: actions/upload-artifact@v4
         with:
           name: SamsungInternet_Offline_Installer
           path: SamsungInternet_Offline.zip
-          retention-days: 5 # Giữ file trên GitHub trong 5 ngày
+          retention-days: 5
