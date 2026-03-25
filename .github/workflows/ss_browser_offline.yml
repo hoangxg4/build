@@ -16,32 +16,52 @@ jobs:
           Invoke-WebRequest -Uri $url -OutFile $installer
         shell: powershell
 
-      - name: 2. Silent Install
+      - name: 2. Silent Install (Chromium Engine)
         run: |
-          # Chạy cài đặt ngầm. Tuỳ thuộc vào công cụ build EXE (Inno Setup, NSIS, InstallShield),
-          # flag cài đặt ngầm thường là /S, /silent, /quiet, hoặc /qn.
-          Write-Host "Bắt đầu cài đặt..."
-          $process = Start-Process -FilePath ".\SamsungSetup.exe" -ArgumentList "/S", "/quiet" -Wait -PassThru -NoNewWindow
+          Write-Host "Bắt đầu cài đặt (Chromium Engine)..."
           
-          if ($process.ExitCode -ne 0) {
-            Write-Warning "Exit code cài đặt không phải là 0 (Exit Code: $($process.ExitCode))."
-          }
+          # Flags chuyên dụng cho Chromium mini_installer
+          $args = @("--system-level", "--silent", "--do-not-launch-chrome")
+          $process = Start-Process -FilePath ".\SamsungSetup.exe" -ArgumentList $args -Wait -PassThru -NoNewWindow
           
-          # Đợi thêm 15 giây để đảm bảo I/O disk hoàn tất việc bung file
-          Start-Sleep -Seconds 15
+          Write-Host "Tiến trình cài đặt khởi tạo kết thúc với Exit Code: $($process.ExitCode)"
+          
+          # Đợi 30s để tiến trình con (setup.exe) hoàn tất việc bung file và ghi Registry
+          Write-Host "Chờ 30 giây để I/O disk hoàn tất..."
+          Start-Sleep -Seconds 30
         shell: powershell
 
       - name: 3. Verify Directory & Compress
         run: |
-          $targetDir = "C:\Program Files\Samsung\Internet\Application"
+          # Kiểm tra cả 2 phân vùng cài đặt (System và User)
+          $targetDirSystem = "C:\Program Files\Samsung\Internet\Application"
+          $targetDirUser = "$env:LOCALAPPDATA\Samsung\Internet\Application"
           $zipName = "SamsungInternet_Offline.zip"
           
-          if (Test-Path $targetDir) {
-              Write-Host "Tìm thấy thư mục: $targetDir"
-              Write-Host "Đang nén..."
-              Compress-Archive -Path "$targetDir\*" -DestinationPath $zipName -Force
+          $finalDir = ""
+          
+          if (Test-Path $targetDirSystem) {
+              $finalDir = $targetDirSystem
+              Write-Host "Phát hiện cài đặt System-level tại: $finalDir"
+          } elseif (Test-Path $targetDirUser) {
+              $finalDir = $targetDirUser
+              Write-Host "Phát hiện cài đặt User-level tại: $finalDir"
+          }
+
+          if ($finalDir -ne "") {
+              Write-Host "Đang nén thư mục..."
+              Compress-Archive -Path "$finalDir\*" -DestinationPath $zipName -Force
+              Write-Host "Nén thành công file: $zipName"
           } else {
-              Write-Error "Không tìm thấy thư mục $targetDir. Có thể cài đặt ngầm thất bại hoặc sai đường dẫn."
+              Write-Error "Lỗi: Không tìm thấy thư mục cài đặt ở cả System và User level."
+              
+              # Debug info
+              Write-Host "--- Thử tìm thư mục Samsung ở Program Files ---"
+              Get-ChildItem -Path "C:\Program Files\Samsung" -Recurse -ErrorAction SilentlyContinue | Select-Object FullName
+              
+              Write-Host "--- Thử tìm thư mục Samsung ở LocalAppData ---"
+              Get-ChildItem -Path "$env:LOCALAPPDATA\Samsung" -Recurse -ErrorAction SilentlyContinue | Select-Object FullName
+              
               exit 1
           }
         shell: powershell
@@ -51,4 +71,4 @@ jobs:
         with:
           name: samsung-internet-offline-zip
           path: SamsungInternet_Offline.zip
-          retention-days: 7 # Giữ file trên GitHub trong 7 ngày
+          retention-days: 7
