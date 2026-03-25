@@ -1,7 +1,7 @@
 name: Build Samsung Internet Offline Installer
 
 on:
-  workflow_dispatch: # Cho phép trigger thủ công từ giao diện GitHub Actions
+  workflow_dispatch:
 
 jobs:
   build-and-pack:
@@ -16,13 +16,14 @@ jobs:
           Invoke-WebRequest -Uri $url -OutFile $installer
         shell: powershell
 
-      - name: 2 & 3. Install & Active Polling
+      - name: 2 & 3. Install (User-Level Force) & Active Polling
         run: |
-          Write-Host "Starting Web Installer..."
-          $args = @("--system-level", "--silent", "--do-not-launch-chrome")
+          Write-Host "Starting Web Installer (Forcing User-Level)..."
+          
+          # Đổi --system-level thành --user-level để né lỗi ghi HKLM Registry
+          $args = @("--user-level", "--silent", "--do-not-launch-chrome")
           Start-Process -FilePath ".\SamsungSetup.exe" -ArgumentList $args -NoNewWindow
           
-          $targetDirSystem = "C:\Program Files\Samsung\Internet\Application"
           $targetDirUser = "$env:LOCALAPPDATA\Samsung\Internet\Application"
           $finalDir = ""
           
@@ -31,19 +32,18 @@ jobs:
           $elapsed = 0
           $isInstalled = $false
           
-          Write-Host "Waiting for payload download and extraction (Timeout: 5 mins)..."
+          Write-Host "Waiting for payload download and extraction at $targetDirUser (Timeout: 5 mins)..."
           
           while ($elapsed -lt $timeoutSeconds) {
-              if (Test-Path $targetDirSystem) { $finalDir = $targetDirSystem }
-              elseif (Test-Path $targetDirUser) { $finalDir = $targetDirUser }
-              
-              if ($finalDir -ne "") {
+              if (Test-Path $targetDirUser) {
+                  $finalDir = $targetDirUser
                   $exes = Get-ChildItem -Path $finalDir -Filter "*.exe" -ErrorAction SilentlyContinue
+                  
                   if ($exes.Count -gt 0) {
                       Write-Host "Download complete! Found core executable at $finalDir"
                       $isInstalled = $true
-                      Write-Host "Waiting 15s for file handles to release..."
-                      Start-Sleep -Seconds 15
+                      Write-Host "Waiting 20s for file handles to release..."
+                      Start-Sleep -Seconds 20
                       break
                   }
               }
@@ -54,7 +54,7 @@ jobs:
           }
           
           if (-not $isInstalled) {
-              Write-Error "Timeout! Installation exceeded 5 minutes or network failed."
+              Write-Error "Timeout! Installation exceeded 5 minutes or installer crashed."
               exit 1
           }
           
