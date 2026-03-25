@@ -11,20 +11,29 @@ jobs:
       - name: 1. Download Samsung Internet Installer
         run: |
           $url = "https://browser.samsung.com/media/x64_SamsungInternetSetup.exe"
-          $installer = "SamsungSetup.exe"
           Write-Host "Downloading $url..."
-          Invoke-WebRequest -Uri $url -OutFile $installer
+          Invoke-WebRequest -Uri $url -OutFile "SamsungSetup.exe"
         shell: powershell
 
-      - name: 2 & 3. Install (User-Level Force) & Active Polling
+      - name: 2 & 3. Install (C-Drive & RunAs) & Active Polling
         run: |
-          Write-Host "Starting Web Installer (Forcing User-Level)..."
+          Write-Host "Moving installer to C: drive to bypass Omaha drive bugs..."
+          $workDir = "C:\SamsungTemp"
+          New-Item -ItemType Directory -Force -Path $workDir | Out-Null
+          Move-Item -Path ".\SamsungSetup.exe" -Destination "$workDir\SamsungSetup.exe" -Force
+          Set-Location -Path $workDir
           
-          # Đổi --system-level thành --user-level để né lỗi ghi HKLM Registry
-          $args = @("--user-level", "--silent", "--do-not-launch-chrome")
-          Start-Process -FilePath ".\SamsungSetup.exe" -ArgumentList $args -NoNewWindow
+          Write-Host "Pre-creating Registry keys to prevent Omaha crash..."
+          New-Item -Path "HKLM:\SOFTWARE\Samsung\Update" -Force -ErrorAction SilentlyContinue | Out-Null
+          New-Item -Path "HKLM:\SOFTWARE\Google\Update" -Force -ErrorAction SilentlyContinue | Out-Null
           
-          $targetDirUser = "$env:LOCALAPPDATA\Samsung\Internet\Application"
+          Write-Host "Starting Web Installer with forced High-IL (RunAs)..."
+          $args = @("--system-level", "--silent", "--do-not-launch-chrome")
+          
+          # -Verb RunAs ép PowerShell cấp Elevation Token (Quyền Admin tuyệt đối)
+          Start-Process -FilePath ".\SamsungSetup.exe" -ArgumentList $args -NoNewWindow -Verb RunAs
+          
+          $targetDir = "C:\Program Files\Samsung\Internet\Application"
           $finalDir = ""
           
           $timeoutSeconds = 300
@@ -32,11 +41,11 @@ jobs:
           $elapsed = 0
           $isInstalled = $false
           
-          Write-Host "Waiting for payload download and extraction at $targetDirUser (Timeout: 5 mins)..."
+          Write-Host "Waiting for payload at $targetDir (Timeout: 5 mins)..."
           
           while ($elapsed -lt $timeoutSeconds) {
-              if (Test-Path $targetDirUser) {
-                  $finalDir = $targetDirUser
+              if (Test-Path $targetDir) {
+                  $finalDir = $targetDir
                   $exes = Get-ChildItem -Path $finalDir -Filter "*.exe" -ErrorAction SilentlyContinue
                   
                   if ($exes.Count -gt 0) {
@@ -58,10 +67,11 @@ jobs:
               exit 1
           }
           
-          $zipName = "SamsungInternet_Offline.zip"
-          Write-Host "Compressing offline folder..."
-          Compress-Archive -Path "$finalDir\*" -DestinationPath $zipName -Force
-          Write-Host "Compression successful: $zipName"
+          # Quay lại workspace mặc định của GitHub để file ZIP xuất ra đúng chỗ
+          $workspaceZip = "$env:GITHUB_WORKSPACE\SamsungInternet_Offline.zip"
+          Write-Host "Compressing offline folder to workspace..."
+          Compress-Archive -Path "$finalDir\*" -DestinationPath $workspaceZip -Force
+          Write-Host "Compression successful!"
         shell: powershell
 
       - name: 4. Upload Offline Installer Artifact
