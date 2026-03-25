@@ -5,7 +5,6 @@ on:
 
 permissions:
   contents: write
-  actions: write # BẮT BUỘC: Cấp quyền để workflow có thể xóa artifact
 
 jobs:
   build:
@@ -67,26 +66,42 @@ jobs:
           other-clang-branch: master
           aosp-gcc: true
           android-version: 12
-          anykernel3: true
-          anykernel3-url: https://github.com/osm0sis/AnyKernel3
+          anykernel3: false # TẮT TÍNH NĂNG TỰ ĐỘNG LỖI
           release: false
           access-token: ${{ secrets.GITHUB_TOKEN }}
           extra-make-args: '["LLVM=1", "LLVM_IAS=1", "KCFLAGS=-w", "CC=clang", "LD=ld.lld"]'
 
-      - name: Find and Prepare Release Zip
+      - name: Package AnyKernel3 Manually
         run: |
-          echo "=== Searching for AnyKernel3 zip ==="
-          # Tìm file zip động để tránh lỗi hardcode path
-          ZIP_FILE=$(find ${{ github.workspace }} -type f -name "*AnyKernel*.zip" | head -n 1)
+          echo "=== 1. Clone AnyKernel3 chuẩn ==="
+          git clone https://github.com/osm0sis/AnyKernel3.git AK3
+          cd AK3
+          rm -rf .git # Xóa thư mục git ẩn để giảm dung lượng file zip
           
-          if [ -z "$ZIP_FILE" ]; then
-            echo "❌ Fatal: Không tìm thấy file AnyKernel3.zip nào trong workspace!"
+          echo "=== 2. Lấy Kernel Image ==="
+          # Tìm file Image.gz-dtb (hoặc Image.gz, Image) trong thư mục build out
+          KERNEL_IMAGE=$(find ${{ github.workspace }}/kernel_source -type f \( -name "Image.gz-dtb" -o -name "Image.gz" -o -name "Image" \) | grep "arch/arm64/boot" | head -n 1)
+          
+          if [ -z "$KERNEL_IMAGE" ]; then
+            echo "❌ Fatal: Không tìm thấy Kernel Image sau khi compile!"
             exit 1
           fi
           
-          echo "✅ Đã tìm thấy: $ZIP_FILE"
-          # Đổi tên và copy ra root để dễ dàng upload
-          cp "$ZIP_FILE" ${{ github.workspace }}/AnyKernel3_A71_ReSukiSU.zip
+          echo "✅ Đã tìm thấy và copy: $KERNEL_IMAGE"
+          cp "$KERNEL_IMAGE" ./
+          
+          echo "=== 3. Cấu hình nhanh anykernel.sh ==="
+          # Thay đổi device names cơ bản thành a71
+          sed -i 's/device.name1=maguro/device.name1=a71/g' anykernel.sh
+          sed -i 's/device.name2=toro/device.name2=a715f/g' anykernel.sh
+          sed -i 's/device.name3=toroplus/device.name3=a715/g' anykernel.sh
+          
+          echo "=== 4. Đóng gói Zip chuẩn ==="
+          # Nén tất cả các file trong thư mục AK3 hiện tại
+          zip -r9 ${{ github.workspace }}/AnyKernel3_A71_ReSukiSU.zip *
+          
+          echo "=== 5. Kiểm tra cấu trúc file zip ==="
+          unzip -l ${{ github.workspace }}/AnyKernel3_A71_ReSukiSU.zip
 
       - name: Upload Release los_a71_ksu
         uses: softprops/action-gh-release@v1
@@ -101,10 +116,3 @@ jobs:
           files: ${{ github.workspace }}/AnyKernel3_A71_ReSukiSU.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Cleanup Artifact (Anykernel3-flasher)
-        uses: geekyeggo/delete-artifact@v5
-        with:
-          name: Anykernel3-flasher* # Dùng wildcard đề phòng tool đổi tên version
-          useGlob: true
-          failOnError: false # Không làm fail toàn bộ workflow nếu artifact không tồn tại
