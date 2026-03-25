@@ -15,78 +15,72 @@ jobs:
           Invoke-WebRequest -Uri $url -OutFile "SamsungSetup.exe"
         shell: powershell
 
-      - name: 2 & 3. API Intercept & Download CRX (Bypass CUP2)
+      - name: 2 & 3. API Intercept via XML Endpoint (Bypass CUP2)
         run: |
-          Write-Host "Bypass CUP2 Key: Gửi Request JSON thuần lên Server..."
+          Write-Host "Chuyển hướng chiến thuật: Tấn công Endpoint XML Legacy..."
           
-          # Đã xóa bỏ hoàn toàn ?cup2key=... và ?cup2hreq=...
-          $url = "https://update.internet.apps.samsung.com/service/update2/json"
+          # Đổi URL: Xóa đuôi /json đi
+          $url = "https://update.internet.apps.samsung.com/service/update2"
           
           $headers = @{
-              "Content-Type" = "application/json"
+              "Content-Type" = "application/xml"
               "User-Agent" = "SamsungInternetUpdater 143.0.0.8"
+              "X-Goog-Update-AppId" = "ohpjbciplfdockeiligelcjnkiejldpn"
+              "X-Goog-Update-Updater" = "updater-143.0.7499.194"
           }
           
-          $payload = @{
-              request = @{
-                  protocol = "3.0"
-                  os = @{ platform = "win"; version = "10.0"; arch = "x64" }
-                  app = @(
-                      @{
-                          appid = "ohpjbciplfdockeiligelcjnkiejldpn"
-                          version = "0.0.0.0"
-                          updatecheck = @{}
-                      }
-                  )
-              }
-          } | ConvertTo-Json -Depth 10 -Compress
+          # Dùng nguyên bản XML Request
+          $xmlRequest = @"
+          <?xml version="1.0" encoding="UTF-8"?>
+          <request protocol="3.0" updater="samsung-internet" ismachine="1">
+              <os platform="win" version="10.0" arch="x64"/>
+              <app appid="ohpjbciplfdockeiligelcjnkiejldpn" version="0.0.0.0" installsource="ondemand">
+                  <updatecheck/>
+              </app>
+          </request>
+          "@
           
-          Write-Host "Đang gọi API Omaha..."
-          $response = Invoke-WebRequest -Uri $url -Method Post -Headers $headers -Body $payload -UseBasicParsing
-          $rawText = $response.Content
+          Write-Host "Đang gửi gói tin XML..."
+          $response = Invoke-WebRequest -Uri $url -Method Post -Headers $headers -Body $xmlRequest -UseBasicParsing
           
-          # Cắt bỏ JSON Hijacking Protection ()]}')
-          if ($rawText.StartsWith(")]}'")) {
-              $rawText = $rawText.Substring(4).Trim()
-          }
+          # Ép kiểu phản hồi về định dạng XML của PowerShell để dễ bóc tách
+          [xml]$xmlData = $response.Content
           
-          $data = $rawText | ConvertFrom-Json
+          # Trích xuất dữ liệu bằng XPath
+          $updateCheckStatus = $xmlData.SelectSingleNode("//updatecheck").status
           
-          # Xử lý linh hoạt 2 cấu trúc JSON thường gặp của Omaha
-          $appData = if ($data.response.apps) { $data.response.apps[0] } else { $data.response.app[0] }
-          $updateCheck = $appData.updatecheck
-          
-          if ($updateCheck.status -eq "ok") {
-              $version = $updateCheck.manifest.version
-              if (-not $version) { $version = "Latest" }
-              
-              # Lấy URL tải file
-              $baseUrl = $updateCheck.urls.url[0].codebase
-              $filename = $updateCheck.manifest.packages.package[0].name
+          if ($updateCheckStatus -eq "ok") {
+              $version = $xmlData.SelectSingleNode("//manifest").version
+              $baseUrl = $xmlData.SelectSingleNode("//url").codebase
+              $filename = $xmlData.SelectSingleNode("//package").name
               $dlUrl = "$baseUrl$filename"
               
               Write-Host "=================================================="
-              Write-Host "✅ JACKPOT!!! Tìm thấy bản v$version"
-              Write-Host "✅ Tải từ: $dlUrl"
+              Write-Host "✅ JACKPOT!!! Phiên bản: $version"
+              Write-Host "✅ Link tải gốc: $dlUrl"
               Write-Host "=================================================="
               
-              Write-Host "Đang tải file Payload (.crx)..."
-              $crxFile = "SamsungInternet.crx"
-              Invoke-WebRequest -Uri $dlUrl -OutFile $crxFile
+              Write-Host "Đang tải file Payload ($filename)..."
+              Invoke-WebRequest -Uri $dlUrl -OutFile $filename
               
-              Write-Host "Trích xuất file CRX..."
-              # CRX thực chất là chuẩn nén ZIP, đổi tên và giải nén
-              $zipFile = "SamsungInternet.zip"
-              Rename-Item -Path $crxFile -NewName $zipFile
-              
+              Write-Host "Giải mã và trích xuất file CRX bằng 7-Zip..."
               $extractDir = "SamsungOffline"
-              Expand-Archive -Path $zipFile -DestinationPath $extractDir -Force
+              New-Item -ItemType Directory -Force -Path $extractDir | Out-Null
               
-              Write-Host "Đóng gói Artifact..."
-              Compress-Archive -Path "$extractDir\*" -DestinationPath "SamsungInternet_Offline.zip" -Force
-              Write-Host "Thành công tuyệt đối!"
+              # Sử dụng 7-Zip có sẵn của GitHub Actions để ép giải nén CRX bỏ qua Header bảo mật
+              & "C:\Program Files\7-Zip\7z.exe" x $filename -o$extractDir -y
+              
+              if ($LASTEXITCODE -eq 0) {
+                  Write-Host "Đóng gói Artifact thành file ZIP hoàn chỉnh..."
+                  Compress-Archive -Path "$extractDir\*" -DestinationPath "SamsungInternet_Offline.zip" -Force
+                  Write-Host "✅ Thành công tuyệt đối!"
+              } else {
+                  Write-Error "❌ Lỗi khi giải nén file CRX."
+                  exit 1
+              }
           } else {
-              Write-Error "❌ Server từ chối. Status: $($updateCheck.status)"
+              Write-Error "❌ Server từ chối yêu cầu. XML Response:"
+              Write-Host $response.Content
               exit 1
           }
         shell: powershell
