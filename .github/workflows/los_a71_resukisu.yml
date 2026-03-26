@@ -30,17 +30,19 @@ jobs:
           fetch-depth: 0
           submodules: true
 
-      - name: Setup ReSukiSU (Fix Git Submodule Error)
+      - name: Setup ReSukiSU (Fix Git Submodule File Not Found)
         run: |
           cd kernel_source
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           git config --global user.name "github-actions[bot]"
           
-          # 1. Tải ReSukiSU vào thư mục gốc của source để giữ nguyên lịch sử git
-          git clone https://github.com/ReSukiSU/ReSukiSU.git KernelSU
+          # 1. Dùng lệnh CHUẨN của Git để thêm Submodule, tránh tình trạng "vỏ rỗng"
+          git submodule add https://github.com/ReSukiSU/ReSukiSU.git KernelSU
           
-          # 2. Tạo Symlink (đường dẫn tắt) trỏ vào drivers - Cách chuẩn của hệ thống!
-          ln -sf ../KernelSU/kernel drivers/kernelsu
+          # 2. Tạo đường dẫn tắt chuẩn xác vào thư mục drivers
+          cd drivers
+          ln -sf ../KernelSU/kernel kernelsu
+          cd ..
           
           # 3. Khai báo Makefile và Kconfig
           echo 'obj-$(CONFIG_KSU) += kernelsu/' >> drivers/Makefile
@@ -52,12 +54,12 @@ jobs:
           echo "CONFIG_HAVE_KPROBES=y" >> arch/arm64/configs/a71_defconfig
           echo "CONFIG_KPROBE_EVENTS=y" >> arch/arm64/configs/a71_defconfig
           
-          # Dọn dẹp các lệnh tắt kprobes bị sót lại
+          # Dọn dẹp kprobes cũ nếu có
           sed -i '/CONFIG_KPROBES=n/d' arch/arm64/configs/a71_defconfig
           sed -i '/# CONFIG_KPROBES is not set/d' arch/arm64/configs/a71_defconfig
           
           git add .
-          git commit -m "Fix Kbuild integration via symlink for ReSukiSU"
+          git commit -m "Fix ReSukiSU Git Submodule integration"
           git branch -m master
 
       - name: Build Kernel
@@ -150,7 +152,7 @@ jobs:
           body: |
             ### ReSukiSU Kernel for Samsung Galaxy A71
             - **Kernel Source:** LineageOS/android_kernel_samsung_a71 (lineage-23.2)
-            - **Fixes:** Fixed Git Submodule error during compile. ReSukiSU fully integrated.
+            - **Fixes:** Applied proper `git submodule` to ensure ReSukiSU source code is actually included.
           files: ${{ github.workspace }}/AnyKernel3_A71_ReSukiSU.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
