@@ -30,35 +30,34 @@ jobs:
           fetch-depth: 0
           submodules: true
 
-      - name: Setup ReSukiSU (Sửa lỗi Kconfig)
+      - name: Setup ReSukiSU (Fix Git Submodule Error)
         run: |
           cd kernel_source
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           git config --global user.name "github-actions[bot]"
           
-          # 1. Tải ReSukiSU
-          git clone https://github.com/ReSukiSU/ReSukiSU.git kernel/ReSukiSU
-          mkdir -p drivers/kernelsu
-          cp -r kernel/ReSukiSU/kernel/* drivers/kernelsu/
+          # 1. Tải ReSukiSU vào thư mục gốc của source để giữ nguyên lịch sử git
+          git clone https://github.com/ReSukiSU/ReSukiSU.git KernelSU
           
-          # 2. KHAI BÁO CHUẨN CHO KBUILD (Fix lỗi App báo không hỗ trợ)
-          # Khai báo Makefile để compile
+          # 2. Tạo Symlink (đường dẫn tắt) trỏ vào drivers - Cách chuẩn của hệ thống!
+          ln -sf ../KernelSU/kernel drivers/kernelsu
+          
+          # 3. Khai báo Makefile và Kconfig
           echo 'obj-$(CONFIG_KSU) += kernelsu/' >> drivers/Makefile
-          # Khai báo Kconfig để hệ thống nhận diện biến CONFIG_KSU
           echo 'source "drivers/kernelsu/Kconfig"' >> drivers/Kconfig
           
-          # 3. Cấu hình defconfig: Bật KSU và KPROBES
+          # 4. Cấu hình defconfig: Bật KSU và KPROBES
           echo "CONFIG_KSU=y" >> arch/arm64/configs/a71_defconfig
           echo "CONFIG_KPROBES=y" >> arch/arm64/configs/a71_defconfig
           echo "CONFIG_HAVE_KPROBES=y" >> arch/arm64/configs/a71_defconfig
           echo "CONFIG_KPROBE_EVENTS=y" >> arch/arm64/configs/a71_defconfig
           
-          # Dọn dẹp nếu có lệnh tắt kprobes bị sót lại
+          # Dọn dẹp các lệnh tắt kprobes bị sót lại
           sed -i '/CONFIG_KPROBES=n/d' arch/arm64/configs/a71_defconfig
           sed -i '/# CONFIG_KPROBES is not set/d' arch/arm64/configs/a71_defconfig
           
           git add .
-          git commit -m "Fix Kbuild integration for ReSukiSU"
+          git commit -m "Fix Kbuild integration via symlink for ReSukiSU"
           git branch -m master
 
       - name: Build Kernel
@@ -151,7 +150,7 @@ jobs:
           body: |
             ### ReSukiSU Kernel for Samsung Galaxy A71
             - **Kernel Source:** LineageOS/android_kernel_samsung_a71 (lineage-23.2)
-            - **Fixes:** Added Kconfig integration. App should now properly report "Working".
+            - **Fixes:** Fixed Git Submodule error during compile. ReSukiSU fully integrated.
           files: ${{ github.workspace }}/AnyKernel3_A71_ReSukiSU.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
