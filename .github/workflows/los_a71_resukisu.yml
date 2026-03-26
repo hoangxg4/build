@@ -39,7 +39,7 @@ jobs:
           # 1. Thêm Submodule ReSukiSU
           git submodule add https://github.com/ReSukiSU/ReSukiSU.git KernelSU
           
-          # 2. BOT PYTHON TỰ ĐỘNG CHÈN CODE MANUAL HOOK VÀO KERNEL
+          # 2. BOT PYTHON: PHIÊN BẢN BLOCK-SCOPE (Né mọi lỗi của C)
           cat << 'EOF' > patch_ksu.py
           import os
 
@@ -47,82 +47,47 @@ jobs:
               {
                   'file': 'fs/stat.c',
                   'search': 'int error = vfs_fstatat(dfd, filename, &stat, flag);',
-                  'before': '#ifdef CONFIG_KSU_MANUAL_HOOK\n\tksu_handle_stat(&dfd, &filename, &flag);\n#endif\n'
+                  'before': '#ifdef CONFIG_KSU_MANUAL_HOOK\n\t{\n\t\textern int ksu_handle_stat(int *dfd, const char __user **filename_user, int *flags);\n\t\tksu_handle_stat(&dfd, &filename, &flag);\n\t}\n#endif\n'
               },
               {
                   'file': 'fs/stat.c',
                   'search': 'error = cp_new_stat(&stat, statbuf);',
-                  'after': '\n#ifdef CONFIG_KSU_MANUAL_HOOK\n\tksu_handle_newfstat_ret(&fd, &statbuf);\n#endif'
+                  'after': '\n#ifdef CONFIG_KSU_MANUAL_HOOK\n\t{\n\t\textern void ksu_handle_newfstat_ret(unsigned int *fd, struct stat __user **statbuf_ptr);\n\t\tksu_handle_newfstat_ret(&fd, &statbuf);\n\t}\n#endif'
               },
               {
                   'file': 'fs/stat.c',
                   'search': 'error = cp_new_stat64(&stat, statbuf);',
-                  'after': '\n#ifdef CONFIG_KSU_MANUAL_HOOK\n\tksu_handle_fstat64_ret(&fd, &statbuf);\n#endif'
-              },
-              {
-                  'file': 'fs/stat.c',
-                  'search': 'SYSCALL_DEFINE4(newfstatat',
-                  'before': '#ifdef CONFIG_KSU_MANUAL_HOOK\nextern int ksu_handle_stat(int *dfd, const char __user **filename_user, int *flags);\nextern void ksu_handle_newfstat_ret(unsigned int *fd, struct stat __user **statbuf_ptr);\nstruct stat64;\nextern void ksu_handle_fstat64_ret(unsigned long *fd, struct stat64 __user **statbuf_ptr);\n#endif\n\n'
+                  'after': '\n#ifdef CONFIG_KSU_MANUAL_HOOK\n\t{\n\t\textern void ksu_handle_fstat64_ret(int *fd, void *statbuf_ptr);\n\t\tksu_handle_fstat64_ret((int *)&fd, (void *)&statbuf);\n\t}\n#endif'
               },
               {
                   'file': 'fs/exec.c',
                   'search': 'struct user_arg_ptr envp = { .ptr.native = __envp };',
-                  'after': '\n#ifdef CONFIG_KSU_MANUAL_HOOK\n\tksu_handle_execveat((int *)AT_FDCWD, &filename, &argv, &envp, 0);\n#endif'
-              },
-              {
-                  'file': 'fs/exec.c',
-                  'search': 'int do_execve(struct filename *filename,',
-                  'before': '#ifdef CONFIG_KSU_MANUAL_HOOK\nextern int ksu_handle_execveat(int *fd, struct filename **filename_ptr, void *argv, void *envp, int *flags);\n#endif\n\n'
+                  'after': '\n#ifdef CONFIG_KSU_MANUAL_HOOK\n\t{\n\t\textern int ksu_handle_execveat(int *fd, struct filename **filename_ptr, void *argv, void *envp, int *flags);\n\t\tksu_handle_execveat((int *)AT_FDCWD, &filename, &argv, &envp, 0);\n\t}\n#endif'
               },
               {
                   'file': 'fs/open.c',
                   'search': 'if (mode & ~S_IRWXO)',
-                  'before': '#ifdef CONFIG_KSU_MANUAL_HOOK\n\tksu_handle_faccessat(&dfd, &filename, &mode, NULL);\n#endif\n\n'
-              },
-              {
-                  'file': 'fs/open.c',
-                  'search': 'SYSCALL_DEFINE3(faccessat',
-                  'before': '#ifdef CONFIG_KSU_MANUAL_HOOK\nextern int ksu_handle_faccessat(int *dfd, const char __user **filename_user, int *mode, int *flags);\n#endif\n\n'
+                  'before': '#ifdef CONFIG_KSU_MANUAL_HOOK\n\t{\n\t\textern int ksu_handle_faccessat(int *dfd, const char __user **filename_user, int *mode, int *flags);\n\t\tksu_handle_faccessat(&dfd, &filename, &mode, NULL);\n\t}\n#endif\n\n'
               },
               {
                   'file': 'kernel/reboot.c',
                   'search': 'if (!ns_capable(pid_ns->user_ns, CAP_SYS_BOOT))',
-                  'before': '#ifdef CONFIG_KSU_MANUAL_HOOK\n\tksu_handle_sys_reboot(magic1, magic2, cmd, &arg);\n#endif\n\n'
-              },
-              {
-                  'file': 'kernel/reboot.c',
-                  'search': 'SYSCALL_DEFINE4(reboot',
-                  'before': '#ifdef CONFIG_KSU_MANUAL_HOOK\nextern int ksu_handle_sys_reboot(int magic1, int magic2, unsigned int cmd, void __user **arg);\n#endif\n\n'
+                  'before': '#ifdef CONFIG_KSU_MANUAL_HOOK\n\t{\n\t\textern int ksu_handle_sys_reboot(int magic1, int magic2, unsigned int cmd, void __user **arg);\n\t\tksu_handle_sys_reboot(magic1, magic2, cmd, &arg);\n\t}\n#endif\n\n'
               },
               {
                   'file': 'drivers/input/input.c',
                   'search': 'if (is_event_supported(type, dev->evbit, EV_MAX)) {',
-                  'before': '#ifdef CONFIG_KSU_MANUAL_HOOK\n\tif (unlikely(ksu_input_hook))\n\t\tksu_handle_input_handle_event(&type, &code, &value);\n#endif\n\n'
-              },
-              {
-                  'file': 'drivers/input/input.c',
-                  'search': 'void input_event(struct input_dev *dev,',
-                  'before': '#ifdef CONFIG_KSU_MANUAL_HOOK\nextern bool ksu_input_hook __read_mostly;\nextern int ksu_handle_input_handle_event(unsigned int *type, unsigned int *code, int *value);\n#endif\n\n'
+                  'before': '#ifdef CONFIG_KSU_MANUAL_HOOK\n\t{\n\t\textern bool ksu_input_hook;\n\t\textern int ksu_handle_input_handle_event(unsigned int *type, unsigned int *code, int *value);\n\t\tif (unlikely(ksu_input_hook))\n\t\t\tksu_handle_input_handle_event(&type, &code, &value);\n\t}\n#endif\n\n'
               },
               {
                   'file': 'kernel/sys.c',
                   'search': 'kruid = make_kuid(ns, ruid);',
-                  'before': '#ifdef CONFIG_KSU_MANUAL_HOOK\n\t(void)ksu_handle_setresuid(ruid, euid, suid);\n#endif\n\n'
-              },
-              {
-                  'file': 'kernel/sys.c',
-                  'search': 'SYSCALL_DEFINE3(setresuid',
-                  'before': '#ifdef CONFIG_KSU_MANUAL_HOOK\nextern int ksu_handle_setresuid(uid_t ruid, uid_t euid, uid_t suid);\n#endif\n\n'
+                  'before': '#ifdef CONFIG_KSU_MANUAL_HOOK\n\t{\n\t\textern int ksu_handle_setresuid(uid_t ruid, uid_t euid, uid_t suid);\n\t\t(void)ksu_handle_setresuid(ruid, euid, suid);\n\t}\n#endif\n\n'
               },
               {
                   'file': 'fs/read_write.c',
                   'search': 'if (f.file) {',
-                  'before': '#ifdef CONFIG_KSU_MANUAL_HOOK\n\tif (unlikely(ksu_init_rc_hook))\n\t\tksu_handle_sys_read(fd, &buf, &count);\n#endif\n\n'
-              },
-              {
-                  'file': 'fs/read_write.c',
-                  'search': 'SYSCALL_DEFINE3(read,',
-                  'before': '#ifdef CONFIG_KSU_MANUAL_HOOK\nextern bool ksu_init_rc_hook __read_mostly;\nextern int ksu_handle_sys_read(unsigned int fd, char __user **buf_ptr, size_t *count_ptr);\n#endif\n\n'
+                  'before': '#ifdef CONFIG_KSU_MANUAL_HOOK\n\t{\n\t\textern bool ksu_init_rc_hook;\n\t\textern int ksu_handle_sys_read(unsigned int fd, char __user **buf_ptr, size_t *count_ptr);\n\t\tif (unlikely(ksu_init_rc_hook))\n\t\t\tksu_handle_sys_read(fd, &buf, &count);\n\t}\n#endif\n\n'
               }
           ]
 
@@ -140,7 +105,7 @@ jobs:
                       content = content.replace(hook['search'], hook['search'] + hook['after'])
                   with open(hook['file'], 'w') as f:
                       f.write(content)
-                  print(f"THÀNH CÔNG: Đã chèn hook vào {hook['file']}")
+                  print(f"THÀNH CÔNG: Đã chèn block-scope hook vào {hook['file']}")
               else:
                   print(f"CẢNH BÁO: Không tìm thấy chuỗi nhận diện trong {hook['file']}")
           EOF
@@ -159,13 +124,13 @@ jobs:
           echo "CONFIG_KSU=y" >> arch/arm64/configs/a71_defconfig
           echo "CONFIG_KSU_MANUAL_HOOK=y" >> arch/arm64/configs/a71_defconfig
           
-          # Tắt KPROBES vì ta đã chèn thủ công
+          # Tắt KPROBES
           sed -i '/CONFIG_KPROBES/d' arch/arm64/configs/a71_defconfig
           sed -i '/CONFIG_HAVE_KPROBES/d' arch/arm64/configs/a71_defconfig
           sed -i '/CONFIG_KPROBE_EVENTS/d' arch/arm64/configs/a71_defconfig
           
           git add .
-          git commit -m "Auto-patched Manual Hooks for ReSukiSU"
+          git commit -m "Auto-patched Manual Hooks with Block Scoping"
           git branch -m master
 
       - name: Build Kernel
@@ -257,8 +222,8 @@ jobs:
           name: Kernel A71 ReSukiSU (los_a71_ksu)
           body: |
             ### ReSukiSU Kernel for Samsung Galaxy A71
-            - **Kernel Source:** LineageOS/android_kernel_samsung_a71 (lineage-23.2)
-            - **Fixes:** Applied Python Auto-Patcher to perfectly inject **Manual Hooks** for 100% stability.
+            - **Kernel Source:** LineageOS/android_kernel_samsung_a71
+            - **Fixes:** Perfect Block-Scope Manual Hooks. Fix fstat64 and Undeclared functions.
           files: ${{ github.workspace }}/AnyKernel3_A71_ReSukiSU.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
