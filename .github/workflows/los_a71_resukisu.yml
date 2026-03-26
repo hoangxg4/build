@@ -39,7 +39,7 @@ jobs:
           # 1. Thêm Submodule ReSukiSU
           git submodule add https://github.com/ReSukiSU/ReSukiSU.git KernelSU
           
-          # 2. BOT PYTHON: TẠO HOOK CHUẨN ĐÓNG GÓI BLOCK-SCOPED
+          # 2. BOT PYTHON: TẠO HOOK (ĐÃ XÓA CÁC HOOK STAT DƯ THỪA)
           cat << 'EOF' > patch_ksu.py
           import os
 
@@ -48,16 +48,6 @@ jobs:
                   'file': 'fs/stat.c',
                   'search': 'error = vfs_fstatat(dfd, filename, &stat, flag);',
                   'before': '#ifdef CONFIG_KSU_MANUAL_HOOK\n\t{\n\t\textern int ksu_handle_stat(int *dfd, const char __user **filename_user, int *flags);\n\t\tksu_handle_stat(&dfd, &filename, &flag);\n\t}\n#endif\n\t'
-              },
-              {
-                  'file': 'fs/stat.c',
-                  'search': 'error = cp_new_stat(&stat, statbuf);',
-                  'after': '\n#ifdef CONFIG_KSU_MANUAL_HOOK\n\t{\n\t\textern void ksu_handle_newfstat_ret(unsigned int *fd, struct stat __user **statbuf_ptr);\n\t\tksu_handle_newfstat_ret(&fd, (struct stat __user **)&statbuf);\n\t}\n#endif'
-              },
-              {
-                  'file': 'fs/stat.c',
-                  'search': 'error = cp_new_stat64(&stat, statbuf);',
-                  'after': '\n#ifdef CONFIG_KSU_MANUAL_HOOK\n\t{\n\t\textern void ksu_handle_fstat64_ret(int *fd, void *statbuf_ptr);\n\t\tksu_handle_fstat64_ret((int *)&fd, (void *)&statbuf);\n\t}\n#endif'
               },
               {
                   'file': 'fs/exec.c',
@@ -128,7 +118,7 @@ jobs:
           sed -i '/CONFIG_KPROBE_EVENTS/d' arch/arm64/configs/a71_defconfig
           
           git add .
-          git commit -m "Fix syntax errors with Block-Scoped Manual Hooks"
+          git commit -m "Fix stat.c errors by removing redundant stat hooks"
           git branch -m master
 
       - name: Build Kernel
@@ -210,7 +200,7 @@ jobs:
           name: Kernel A71 ReSukiSU (los_a71_ksu)
           body: |
             ### ReSukiSU Kernel for Samsung Galaxy A71
-            - **Fixes:** Added Block-Scoped declarations. All undeclared identifier and type errors resolved.
+            - **Fixes:** Removed redundant fstat64 and newfstat hooks to resolve compilation errors.
           files: ${{ github.workspace }}/AnyKernel3_A71_ReSukiSU.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
