@@ -5,7 +5,7 @@ on:
 
 permissions:
   contents: write
-  actions: write # Cần quyền này để xóa Artifact
+  actions: write # Cần quyền này để xóa Artifact rác
 
 jobs:
   build-kernel:
@@ -35,12 +35,17 @@ jobs:
           cd kernel_source
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           git config --global user.name "github-actions[bot]"
+          
+          # Tải ReSukiSU và cài đặt vào source
           git clone https://github.com/ReSukiSU/ReSukiSU.git kernel/ReSukiSU
           mkdir -p drivers/kernelsu
           cp -r kernel/ReSukiSU/kernel/* drivers/kernelsu/
+          
+          # Patch defconfig cho ReSukiSU
           echo "CONFIG_KSU=y" >> arch/arm64/configs/a71_defconfig
           echo "CONFIG_KSU_MANUAL_HOOK=y" >> arch/arm64/configs/a71_defconfig
           sed -i 's/CONFIG_KPROBES=y/CONFIG_KPROBES=n/g' arch/arm64/configs/a71_defconfig
+          
           git add .
           git commit -m "Add ReSukiSU"
           git branch -m master
@@ -52,40 +57,86 @@ jobs:
           kernel-branch: master
           config: a71_defconfig
           arch: arm64
-          ksu: false
+          ksu: false # Đã setup thủ công ở trên
           lxc: false
           aosp-clang: false
           other-clang-url: ${{ github.workspace }}/my-clang
           other-clang-branch: master
           aosp-gcc: true
           android-version: 12
-          anykernel3: true 
+          anykernel3: true # Bật để lách luật action
           anykernel3-url: https://github.com/osm0sis/AnyKernel3
           release: false
           access-token: ${{ secrets.GITHUB_TOKEN }}
           extra-make-args: '["LLVM=1", "LLVM_IAS=1", "KCFLAGS=-w", "CC=clang", "LD=ld.lld"]'
 
-      - name: Package AnyKernel3 Manually
+      - name: Package AnyKernel3 Manually (Clean setup)
         run: |
-          echo "=== 1. Clone AnyKernel3 chuẩn ==="
+          echo "=== 1. Clone AnyKernel3 gốc ==="
           git clone https://github.com/osm0sis/AnyKernel3.git AK3_Manual
           cd AK3_Manual
           rm -rf .git
           
           echo "=== 2. Lấy Kernel Image ==="
           KERNEL_IMAGE=$(find ${{ github.workspace }} -type f \( -name "Image.gz-dtb" -o -name "Image.gz" -o -name "Image" \) | grep -v "AK3_Manual" | head -n 1)
+          if [ -z "$KERNEL_IMAGE" ]; then
+            echo "❌ Fatal: Không tìm thấy Kernel Image!"
+            exit 1
+          fi
+          echo "✅ Đã tìm thấy và copy: $KERNEL_IMAGE"
           cp "$KERNEL_IMAGE" ./
           
-          echo "=== 3. Ghi đè cấu hình chuẩn của A71 vào anykernel.sh ==="
-          # Thay thế các block auto bằng thông số chính xác của A71
-          sed -i 's/do.devicecheck=0/do.devicecheck=1/g' anykernel.sh
-          sed -i 's/device.name1=maguro/device.name1=a71/g' anykernel.sh
-          sed -i 's/device.name2=toro/device.name2=a715f/g' anykernel.sh
-          sed -i 's/device.name3=toroplus/device.name3=a715/g' anykernel.sh
-          sed -i 's|BLOCK=auto|block=/dev/block/bootdevice/by-name/boot|g' anykernel.sh
-          sed -i 's|IS_SLOT_DEVICE=auto|is_slot_device=0|g' anykernel.sh
+          echo "=== 3. Ghi đè file anykernel.sh hoàn toàn mới cho A71 ==="
+          cat << 'EOF' > anykernel.sh
+          # AnyKernel3 Ramdisk Mod Script
+          # Tùy chỉnh chuẩn cho Samsung A71
           
-          echo "=== 4. Đóng gói Zip ==="
+          properties() { '
+          kernel.string=ReSukiSU Kernel cho Samsung A71
+          do.devicecheck=1
+          do.modules=0
+          do.systemless=1
+          do.cleanup=1
+          do.cleanuponabort=0
+          device.name1=a71
+          device.name2=a715f
+          device.name3=a715
+          device.name4=
+          device.name5=
+          supported.versions=
+          supported.patchlevels=
+          supported.vendorpatchlevels=
+          '; }
+          
+          attributes() {
+          set_perm_recursive 0 0 755 644 $ramdisk/*;
+          set_perm_recursive 0 0 750 750 $ramdisk/init* $ramdisk/sbin;
+          }
+          
+          block=/dev/block/bootdevice/by-name/boot;
+          is_slot_device=0;
+          ramdisk_compression=auto;
+          patch_vbmeta_flag=auto;
+          
+          . tools/ak3-core.sh;
+          
+          dump_boot;
+          
+          device=$(file_getprop /system/build.prop ro.product.system.device);
+          android=$(file_getprop /system/build.prop ro.build.version.sdk);
+          
+          patch_cmdline "android.is_aosp" "";
+          
+          if [ -n "$android" ] && [ "$android" -lt 34 ]; then
+             ui_print " ";
+             ui_print "Android 13 (or lower) detected. Patching cmdline...";
+             patch_cmdline "android.legacy_ebpf=" "android.legacy_ebpf=1";
+          fi
+          
+          write_boot;
+          EOF
+          
+          echo "=== 4. Đóng gói Zip chuẩn ==="
           zip -r9 ${{ github.workspace }}/AnyKernel3_A71_ReSukiSU.zip *
 
       - name: Upload Release
@@ -95,13 +146,14 @@ jobs:
           name: Kernel A71 ReSukiSU (los_a71_ksu)
           body: |
             Build Kernel Samsung A71 với ReSukiSU
-            - Kernel Source: LineageOS/android_kernel_samsung_a71
-            - Phân vùng: `/dev/block/bootdevice/by-name/boot`
+            - Kernel Source: LineageOS/android_kernel_samsung_a71 (lineage-23.2)
+            - Phân vùng: `/dev/block/bootdevice/by-name/boot` (Đã loại bỏ code rác OMAP)
+            - Vá lỗi eBPF cho Android 13
           files: ${{ github.workspace }}/AnyKernel3_A71_ReSukiSU.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Dọn dẹp Artifact rác (Cleanup)
+      - name: Delete Workspace Artifacts
         uses: geekyeggo/delete-artifact@v5
         with:
-          name: '*' # Lệnh này sẽ quét và xóa sạch mọi artifact được tạo ra trong quá trình chạy
+          name: '*' # Lệnh này quét sạch mọi Artifact thừa thãi do Action sinh ra
