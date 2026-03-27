@@ -30,7 +30,7 @@ jobs:
           fetch-depth: 0
           submodules: true
 
-      - name: Setup ReSukiSU (Strict Block-Scoped Hooks - FIX BOOTLOOP)
+      - name: Setup ReSukiSU (Strict Block-Scoped Hooks - FINAL FIX)
         run: |
           cd kernel_source
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
@@ -39,7 +39,7 @@ jobs:
           # 1. Thêm Submodule ReSukiSU
           git submodule add https://github.com/ReSukiSU/ReSukiSU.git KernelSU
           
-          # 2. BOT PYTHON: TẠO HOOK (ĐÃ FIX LỖI CON TRỎ STAT GÂY BOOTLOOP)
+          # 2. BOT PYTHON: TẠO HOOK CHUẨN (Bao gồm vfs_statx cho Android 12+)
           cat << 'EOF' > patch_ksu.py
           import os
 
@@ -51,13 +51,8 @@ jobs:
               },
               {
                   'file': 'fs/stat.c',
-                  'search': 'return cp_new_stat(&stat, statbuf);',
-                  'before': '#ifdef CONFIG_KSU_MANUAL_HOOK\n\t{\n\t\textern int ksu_handle_newfstat_ret(int *dfd, void *statbuf);\n\t\tksu_handle_newfstat_ret(&dfd, statbuf);\n\t}\n#endif\n\t'
-              },
-              {
-                  'file': 'fs/stat.c',
-                  'search': 'return cp_new_stat64(&stat, statbuf);',
-                  'before': '#ifdef CONFIG_KSU_MANUAL_HOOK\n\t{\n\t\textern int ksu_handle_fstat64_ret(int *dfd, void *statbuf);\n\t\tksu_handle_fstat64_ret(&dfd, statbuf);\n\t}\n#endif\n\t'
+                  'search': 'unsigned statx_flags = flags | AT_NO_AUTOMOUNT;',
+                  'before': '#ifdef CONFIG_KSU_MANUAL_HOOK\n\t{\n\t\textern int ksu_handle_stat(int *dfd, const char __user **filename_user, int *flags);\n\t\tksu_handle_stat(&dfd, &filename, &flags);\n\t}\n#endif\n\t'
               },
               {
                   'file': 'fs/exec.c',
@@ -128,7 +123,7 @@ jobs:
           sed -i '/CONFIG_KPROBE_EVENTS/d' arch/arm64/configs/a71_defconfig
           
           git add .
-          git commit -m "Fix bootloop by using correct statbuf pointer"
+          git commit -m "Fix stat.c undeclared dfd and add vfs_statx for Android 12+"
           git branch -m master
 
       - name: Build Kernel
@@ -210,7 +205,7 @@ jobs:
           name: Kernel A71 ReSukiSU (los_a71_ksu)
           body: |
             ### ReSukiSU Kernel for Samsung Galaxy A71
-            - **Fixes:** Sửa lỗi treo logo (bootloop) do sai con trỏ statbuf.
+            - **Fixes:** Sửa lỗi biên dịch `dfd` và thêm hook `vfs_statx` để nhận Root trên Android 12+.
           files: ${{ github.workspace }}/AnyKernel3_A71_ReSukiSU.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
