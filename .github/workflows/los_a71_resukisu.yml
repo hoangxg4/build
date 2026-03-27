@@ -30,7 +30,7 @@ jobs:
           fetch-depth: 0
           submodules: true
 
-      - name: Setup ReSukiSU (Strict Block-Scoped Hooks)
+      - name: Setup ReSukiSU (Strict Block-Scoped Hooks - FIX BOOTLOOP)
         run: |
           cd kernel_source
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
@@ -39,7 +39,7 @@ jobs:
           # 1. Thêm Submodule ReSukiSU
           git submodule add https://github.com/ReSukiSU/ReSukiSU.git KernelSU
           
-          # 2. BOT PYTHON: TẠO HOOK (ĐÃ FIX LỖI fs/stat.c)
+          # 2. BOT PYTHON: TẠO HOOK (ĐÃ FIX LỖI CON TRỎ STAT GÂY BOOTLOOP)
           cat << 'EOF' > patch_ksu.py
           import os
 
@@ -47,8 +47,17 @@ jobs:
               {
                   'file': 'fs/stat.c',
                   'search': 'error = vfs_fstatat(dfd, filename, &stat, flag);',
-                  'before': '#ifdef CONFIG_KSU_MANUAL_HOOK\n\t{\n\t\textern int ksu_handle_stat(int *dfd, const char __user **filename_user, int *flags);\n\t\tksu_handle_stat(&dfd, &filename, &flag);\n\t}\n#endif\n\t',
-                  'after': '\n#ifdef CONFIG_KSU_MANUAL_HOOK\n\t{\n\t\textern int ksu_handle_newfstat_ret(int *dfd, void *statbuf);\n\t\tksu_handle_newfstat_ret(&dfd, &stat);\n\t\textern int ksu_handle_fstat64_ret(int *dfd, void *statbuf);\n\t\tksu_handle_fstat64_ret(&dfd, &stat);\n\t}\n#endif\n\t'
+                  'before': '#ifdef CONFIG_KSU_MANUAL_HOOK\n\t{\n\t\textern int ksu_handle_stat(int *dfd, const char __user **filename_user, int *flags);\n\t\tksu_handle_stat(&dfd, &filename, &flag);\n\t}\n#endif\n\t'
+              },
+              {
+                  'file': 'fs/stat.c',
+                  'search': 'return cp_new_stat(&stat, statbuf);',
+                  'before': '#ifdef CONFIG_KSU_MANUAL_HOOK\n\t{\n\t\textern int ksu_handle_newfstat_ret(int *dfd, void *statbuf);\n\t\tksu_handle_newfstat_ret(&dfd, statbuf);\n\t}\n#endif\n\t'
+              },
+              {
+                  'file': 'fs/stat.c',
+                  'search': 'return cp_new_stat64(&stat, statbuf);',
+                  'before': '#ifdef CONFIG_KSU_MANUAL_HOOK\n\t{\n\t\textern int ksu_handle_fstat64_ret(int *dfd, void *statbuf);\n\t\tksu_handle_fstat64_ret(&dfd, statbuf);\n\t}\n#endif\n\t'
               },
               {
                   'file': 'fs/exec.c',
@@ -95,7 +104,7 @@ jobs:
                       content = content.replace(search_str, hook['before'] + search_str)
                   if 'after' in hook and hook['after'] not in content:
                       content = content.replace(search_str, search_str + hook['after'])
-                  print(f"THÀNH CÔNG: Đã chèn block-scoped hook vào {hook['file']}")
+                  print(f"THÀNH CÔNG: Đã chèn hook chuẩn vào {hook['file']}")
 
               with open(hook['file'], 'w') as f:
                   f.write(content)
@@ -119,7 +128,7 @@ jobs:
           sed -i '/CONFIG_KPROBE_EVENTS/d' arch/arm64/configs/a71_defconfig
           
           git add .
-          git commit -m "Fix stat.c errors by removing redundant stat hooks"
+          git commit -m "Fix bootloop by using correct statbuf pointer"
           git branch -m master
 
       - name: Build Kernel
@@ -201,7 +210,7 @@ jobs:
           name: Kernel A71 ReSukiSU (los_a71_ksu)
           body: |
             ### ReSukiSU Kernel for Samsung Galaxy A71
-            - **Fixes:** Added complete stat block-scoped hooks for newfstat_ret and fstat64_ret.
+            - **Fixes:** Sửa lỗi treo logo (bootloop) do sai con trỏ statbuf.
           files: ${{ github.workspace }}/AnyKernel3_A71_ReSukiSU.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
