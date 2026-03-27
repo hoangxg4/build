@@ -30,7 +30,7 @@ jobs:
           fetch-depth: 0
           submodules: true
 
-      - name: Setup ReSukiSU (Strict Block-Scoped Hooks - FINAL FIX)
+      - name: Setup ReSukiSU (Strict Block-Scoped Hooks - FIX RESUKISU CHECK)
         run: |
           cd kernel_source
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
@@ -39,7 +39,7 @@ jobs:
           # 1. Thêm Submodule ReSukiSU
           git submodule add https://github.com/ReSukiSU/ReSukiSU.git KernelSU
           
-          # 2. BOT PYTHON: TẠO HOOK CHUẨN (Bao gồm vfs_statx cho Android 12+)
+          # 2. BOT PYTHON: TẠO HOOK CHUẨN (PASS QUA CHECK CỦA RESUKISU)
           cat << 'EOF' > patch_ksu.py
           import os
 
@@ -51,8 +51,13 @@ jobs:
               },
               {
                   'file': 'fs/stat.c',
-                  'search': 'unsigned statx_flags = flags | AT_NO_AUTOMOUNT;',
-                  'before': '#ifdef CONFIG_KSU_MANUAL_HOOK\n\t{\n\t\textern int ksu_handle_stat(int *dfd, const char __user **filename_user, int *flags);\n\t\tksu_handle_stat(&dfd, &filename, &flags);\n\t}\n#endif\n\t'
+                  'search': 'return cp_new_stat(&stat, statbuf);',
+                  'before': '#ifdef CONFIG_KSU_MANUAL_HOOK\n\t{\n\t\textern int ksu_handle_newfstat_ret(int *dfd, void *statbuf);\n\t\tint ksu_fd = (int)fd;\n\t\tksu_handle_newfstat_ret(&ksu_fd, statbuf);\n\t}\n#endif\n\t'
+              },
+              {
+                  'file': 'fs/stat.c',
+                  'search': 'return cp_new_stat64(&stat, statbuf);',
+                  'before': '#ifdef CONFIG_KSU_MANUAL_HOOK\n\t{\n\t\textern int ksu_handle_fstat64_ret(int *dfd, void *statbuf);\n\t\tint ksu_fd = (int)fd;\n\t\tksu_handle_fstat64_ret(&ksu_fd, statbuf);\n\t}\n#endif\n\t'
               },
               {
                   'file': 'fs/exec.c',
@@ -123,7 +128,7 @@ jobs:
           sed -i '/CONFIG_KPROBE_EVENTS/d' arch/arm64/configs/a71_defconfig
           
           git add .
-          git commit -m "Fix stat.c undeclared dfd and add vfs_statx for Android 12+"
+          git commit -m "Fix ReSukiSU build integrity check by restoring newfstat hook with proper fd"
           git branch -m master
 
       - name: Build Kernel
@@ -205,7 +210,7 @@ jobs:
           name: Kernel A71 ReSukiSU (los_a71_ksu)
           body: |
             ### ReSukiSU Kernel for Samsung Galaxy A71
-            - **Fixes:** Sửa lỗi biên dịch `dfd` và thêm hook `vfs_statx` để nhận Root trên Android 12+.
+            - **Fixes:** Pass qua bước check của ReSukiSU build checker.
           files: ${{ github.workspace }}/AnyKernel3_A71_ReSukiSU.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
