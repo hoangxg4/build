@@ -14,24 +14,27 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # 1. Cài đặt musl-tools trên Ubuntu runner để hỗ trợ static compilation
-      - name: Install musl toolchain
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y musl-tools
+      # 1. Cài đặt Zig và cargo-zigbuild
+      - name: Install Zig
+        uses: mlugg/setup-zig@v1
+        with:
+          version: 0.13.0
 
-      # 2. Thêm target x86_64-unknown-linux-musl cho Rust
+      - name: Install cargo-zigbuild
+        run: cargo install cargo-zigbuild
+
+      # 2. Cài đặt Rust toolchain và target x86_64-unknown-linux-musl
       - name: Set up Rust & MUSL target
         uses: dtolnay/rust-toolchain@stable
         with:
           targets: x86_64-unknown-linux-musl
 
-      # 3. Clone dự án và build statically
+      # 3. Clone dự án và build bằng cargo zigbuild
       - name: Clone & Build MediaFlow-Proxy-Light
         run: |
           git clone https://github.com/mhdzumair/MediaFlow-Proxy-Light.git
           cd MediaFlow-Proxy-Light
-          cargo build --release --target x86_64-unknown-linux-musl
+          cargo zigbuild --release --target x86_64-unknown-linux-musl
           # Di chuyển file binary tĩnh ra thư mục gốc
           mv target/x86_64-unknown-linux-musl/release/mediaflow-proxy-light ../mediaflow-proxy-light
 
@@ -58,4 +61,4 @@ jobs:
         run: |
           gh release create MediaFlow-Proxy "mediaflow-proxy-light" \
             --title "MediaFlow Proxy Light (Static/Debian 10 Compatible) - $GITHUB_WORKFLOW #$GITHUB_RUN_NUMBER" \
-            --notes "Auto-built MediaFlow-Proxy-Light with MUSL (Compatible with old glibc / Debian 10)\nBuild date: $(date '+%Y-%m-%d %H:%M:%S %Z')"
+            --notes "Auto-built MediaFlow-Proxy-Light with MUSL & Zig (Compatible with old glibc / Debian 10)\nBuild date: $(date '+%Y-%m-%d %H:%M:%S %Z')"
