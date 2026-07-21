@@ -1,0 +1,61 @@
+name: Build MediaFlow-Proxy-Light Release
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # 1. Cài đặt musl-tools trên Ubuntu runner để hỗ trợ static compilation
+      - name: Install musl toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y musl-tools
+
+      # 2. Thêm target x86_64-unknown-linux-musl cho Rust
+      - name: Set up Rust & MUSL target
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-unknown-linux-musl
+
+      # 3. Clone dự án và build statically
+      - name: Clone & Build MediaFlow-Proxy-Light
+        run: |
+          git clone https://github.com/mhdzumair/MediaFlow-Proxy-Light.git
+          cd MediaFlow-Proxy-Light
+          cargo build --release --target x86_64-unknown-linux-musl
+          # Di chuyển file binary tĩnh ra thư mục gốc
+          mv target/x86_64-unknown-linux-musl/release/mediaflow-proxy-light ../mediaflow-proxy-light
+
+      - name: Configure Git user
+        run: |
+          git config --global user.email "action@github.com"
+          git config --global user.name "GitHub Action"
+
+      - name: Delete old release and tag
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release delete MediaFlow-Proxy -y || true
+          git push origin :refs/tags/MediaFlow-Proxy || true
+
+      - name: Create new tag
+        run: |
+          git tag -a MediaFlow-Proxy -m "Latest MediaFlow-Proxy-Light MUSL build"
+          git push origin MediaFlow-Proxy --force
+
+      - name: Create GitHub release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create MediaFlow-Proxy "mediaflow-proxy-light" \
+            --title "MediaFlow Proxy Light (Static/Debian 10 Compatible) - $GITHUB_WORKFLOW #$GITHUB_RUN_NUMBER" \
+            --notes "Auto-built MediaFlow-Proxy-Light with MUSL (Compatible with old glibc / Debian 10)\nBuild date: $(date '+%Y-%m-%d %H:%M:%S %Z')"
